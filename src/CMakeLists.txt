@@ -69,7 +69,6 @@ set(keepassx_SOURCES
     core/Clock.cpp
     core/Tools.cpp
     core/Translator.cpp
-    core/Uuid.cpp
     core/Base32.h
     core/Base32.cpp
     cli/Utils.cpp
@@ -316,11 +315,8 @@ if(APPLE AND WITH_APP_BUNDLE)
   set(CPACK_PACKAGE_FILE_NAME "${PROGNAME}-${KEEPASSXC_VERSION}")
   include(CPack)
 
-  add_custom_command(TARGET ${PROGNAME}
-                     POST_BUILD
-                     COMMAND ${MACDEPLOYQT_EXE} ${PROGNAME}.app
-                     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/src
-                     COMMENT "Deploying app bundle")
+  include(DeployQt)
+  macdeployqt(${PROGNAME})
 endif()
 
 install(TARGETS ${PROGNAME}
@@ -381,8 +377,8 @@ if(MINGW)
   set(gp_tool \"objdump\")
   " COMPONENT Runtime)
 
-  include(DeployQt4)
-  install_qt4_executable(${PROGNAME}.exe)
+  include(DeployQt)
+  windeployqt(${PROGNAME})
   
   # install Qt5 plugins
   set(PLUGINS_DIR ${Qt5_PREFIX}/share/qt5/plugins)

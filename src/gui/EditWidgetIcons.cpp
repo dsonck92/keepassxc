@@ -20,7 +20,6 @@
 #include "ui_EditWidgetIcons.h"
 
 #include <QFileDialog>
-#include <QFileDialog>
 #include <QMessageBox>
 
 #include "core/Config.h"
@@ -35,7 +34,7 @@
 #endif
 
 IconStruct::IconStruct()
-    : uuid(Uuid())
+    : uuid(QUuid())
     , number(0)
 {
 }
@@ -93,6 +92,7 @@ EditWidgetIcons::EditWidgetIcons(QWidget* parent)
             SIGNAL(widgetUpdated()));
 
     m_ui->faviconButton->setVisible(false);
+    m_ui->addButton->setEnabled(true);
 }
 
 EditWidgetIcons::~EditWidgetIcons()
@@ -127,13 +127,10 @@ IconStruct EditWidgetIcons::state()
 void EditWidgetIcons::reset()
 {
     m_database = nullptr;
-    m_currentUuid = Uuid();
+    m_currentUuid = QUuid();
 }
 
-void EditWidgetIcons::load(const Uuid& currentUuid,
-                           Database* database,
-                           const IconStruct& iconStruct,
-                           const QString& url)
+void EditWidgetIcons::load(const QUuid& currentUuid, Database* database, const IconStruct& iconStruct, const QString& url)
 {
     Q_ASSERT(database);
     Q_ASSERT(!currentUuid.isNull());
@@ -145,7 +142,7 @@ void EditWidgetIcons::load(const Uuid& currentUuid,
     m_customIconModel->setIcons(database->metadata()->customIconsScaledPixmaps(),
                                 database->metadata()->customIconsOrder());
 
-    Uuid iconUuid = iconStruct.uuid;
+    QUuid iconUuid = iconStruct.uuid;
     if (iconUuid.isNull()) {
         int iconNumber = iconStruct.number;
         m_ui->defaultIconsView->setCurrentIndex(m_defaultIconModel->index(iconNumber, 0));
@@ -269,7 +266,9 @@ void EditWidgetIcons::fetchFinished()
     }
 
     if (!image.isNull()) {
-        addCustomIcon(image);
+        if (!addCustomIcon(image)) {
+            emit messageEditEntry(tr("Custom icon already exists"), MessageWidget::Information);
+        }
     } else if (!m_urlsToTry.empty()) {
         m_redirects = 0;
         startFetchFavicon(m_urlsToTry.takeFirst());
@@ -325,35 +324,66 @@ void EditWidgetIcons::addCustomIconFromFile()
     if (m_database) {
         QString filter = QString("%1 (%2);;%3 (*)").arg(tr("Images"), Tools::imageReaderFilter(), tr("All files"));
 
-        QString filename = QFileDialog::getOpenFileName(this, tr("Select Image"), "", filter);
-        if (!filename.isEmpty()) {
-            auto icon = QImage(filename);
-            if (!icon.isNull()) {
-                addCustomIcon(QImage(filename));
+        auto filenames = QFileDialog::getOpenFileNames(this, tr("Select Image(s)"), "", filter);
+        if (!filenames.empty()) {
+            QStringList errornames;
+            int numexisting = 0;
+            for (const auto& filename : filenames) {
+                if (!filename.isEmpty()) {
+                    auto icon = QImage(filename);
+                    if (icon.isNull()) {
+                        errornames << filename;
+                    } else if (!addCustomIcon(icon)) {
+                        // Icon already exists in database
+                        ++numexisting;
+                    }
+                }
+            }
+
+            int numloaded = filenames.size() - errornames.size() - numexisting;
+            QString msg;
+
+            if (numloaded > 0) {
+                msg = tr("Successfully loaded %1 of %n icon(s)", "", filenames.size()).arg(numloaded);
             } else {
-                emit messageEditEntry(tr("Can't read icon"), MessageWidget::Error);
+                msg = tr("No icons were loaded");
+            }
+
+            if (numexisting > 0) {
+                msg += "\n" + tr("%n icon(s) already exist in the database", "", numexisting);
+            }
+
+            if (!errornames.empty()) {
+                // Show the first 8 icons that failed to load
+                errornames = errornames.mid(0, 8);
+                emit messageEditEntry(msg + "\n" + tr("The following icon(s) failed:", "", errornames.size()) +
+                                      "\n" + errornames.join("\n"), MessageWidget::Error);
+            } else if (numloaded > 0) {
+                emit messageEditEntry(msg, MessageWidget::Positive);
+            } else {
+                emit messageEditEntry(msg, MessageWidget::Information);
             }
         }
     }
 }
 
-void EditWidgetIcons::addCustomIcon(const QImage& icon)
+bool EditWidgetIcons::addCustomIcon(const QImage& icon)
 {
+    bool added = false;
     if (m_database) {
-        Uuid uuid = m_database->metadata()->findCustomIcon(icon);
-        if (uuid.isNull()) {
-            uuid = Uuid::random();
-            // Don't add an icon larger than 128x128, but retain original size if smaller
-            if (icon.width() > 128 || icon.height() > 128) {
-                m_database->metadata()->addCustomIcon(uuid, icon.scaled(128, 128));
-            } else {
-                m_database->metadata()->addCustomIcon(uuid, icon);
-            }
+        // Don't add an icon larger than 128x128, but retain original size if smaller
+        auto scaledicon = icon;
+        if (icon.width() > 128 || icon.height() > 128) {
+            scaledicon = icon.scaled(128, 128);
+        }
 
+        QUuid uuid = m_database->metadata()->findCustomIcon(scaledicon);
+        if (uuid.isNull()) {
+            uuid = QUuid::createUuid();
+            m_database->metadata()->addCustomIcon(uuid, scaledicon);
             m_customIconModel->setIcons(m_database->metadata()->customIconsScaledPixmaps(),
                                         m_database->metadata()->customIconsOrder());
-        } else {
-            emit messageEditEntry(tr("Custom icon already exists"), MessageWidget::Information);
+            added = true;
         }
 
         // Select the new or existing icon
@@ -363,6 +393,8 @@ void EditWidgetIcons::addCustomIcon(const QImage& icon)
 
         emit widgetUpdated();
     }
+
+    return added;
 }
 
 void EditWidgetIcons::removeCustomIcon()
@@ -370,7 +402,7 @@ void EditWidgetIcons::removeCustomIcon()
     if (m_database) {
         QModelIndex index = m_ui->customIconsView->currentIndex();
         if (index.isValid()) {
-            Uuid iconUuid = m_customIconModel->uuidFromIndex(index);
+            QUuid iconUuid = m_customIconModel->uuidFromIndex(index);
 
             const QList<Entry*> allEntries = m_database->rootGroup()->entriesRecursive(true);
             QList<Entry*> entriesWithSameIcon;
@@ -459,7 +491,6 @@ void EditWidgetIcons::updateWidgetsDefaultIcons(bool check)
             m_ui->defaultIconsView->setCurrentIndex(index);
         }
         m_ui->customIconsView->selectionModel()->clearSelection();
-        m_ui->addButton->setEnabled(false);
         m_ui->deleteButton->setEnabled(false);
     }
 }
@@ -474,7 +505,6 @@ void EditWidgetIcons::updateWidgetsCustomIcons(bool check)
             m_ui->customIconsView->setCurrentIndex(index);
         }
         m_ui->defaultIconsView->selectionModel()->clearSelection();
-        m_ui->addButton->setEnabled(true);
         m_ui->deleteButton->setEnabled(true);
     }
 }
