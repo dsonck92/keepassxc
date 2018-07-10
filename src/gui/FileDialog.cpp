@@ -99,6 +99,7 @@ QString FileDialog::getFileName(QWidget* parent,
 
         QString result;
 #if defined(Q_OS_MAC) || defined(Q_OS_WIN)
+        Q_UNUSED(defaultName);
         Q_UNUSED(defaultExtension);
         // the native dialogs on these platforms already append the file extension
         result = QFileDialog::getSaveFileName(parent, caption, dir, filter, selectedFilter, options);
@@ -154,6 +155,7 @@ QString FileDialog::getSaveFileName(QWidget* parent,
 
         QString result;
 #if defined(Q_OS_MAC) || defined(Q_OS_WIN)
+        Q_UNUSED(defaultName);
         Q_UNUSED(defaultExtension);
         // the native dialogs on these platforms already append the file extension
         result = QFileDialog::getSaveFileName(parent, caption, dir, filter, selectedFilter, options);
@@ -189,8 +191,7 @@ QString FileDialog::getSaveFileName(QWidget* parent,
     }
 }
 
-QString
-FileDialog::getExistingDirectory(QWidget* parent, const QString& caption, QString dir, QFileDialog::Options options)
+QString FileDialog::getExistingDirectory(QWidget* parent, const QString& caption, QString dir, QFileDialog::Options options)
 {
     if (!m_nextDirName.isEmpty()) {
         QString result = m_nextDirName;
