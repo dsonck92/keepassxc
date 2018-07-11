@@ -87,7 +87,7 @@ Merger::ChangeList Merger::mergeGroup(const MergeContext& context)
     for (Entry* sourceEntry : sourceEntries) {
         Entry* targetEntry = context.m_targetRootGroup->findEntryByUuid(sourceEntry->uuid());
         if (!targetEntry) {
-            changes << tr("Creating missing %1 [%2]").arg(sourceEntry->title()).arg(sourceEntry->uuid().toHex());
+            changes << tr("Creating missing %1 [%2]").arg(sourceEntry->title()).arg(sourceEntry->uuid().toString());
             // This entry does not exist at all. Create it.
             targetEntry = sourceEntry->clone(Entry::CloneIncludeHistory);
             moveEntry(targetEntry, context.m_targetGroup);
@@ -95,7 +95,7 @@ Merger::ChangeList Merger::mergeGroup(const MergeContext& context)
             // Entry is already present in the database. Update it.
             const bool locationChanged = targetEntry->timeInfo().locationChanged() < sourceEntry->timeInfo().locationChanged();
             if (locationChanged && targetEntry->group() != context.m_targetGroup) {
-                changes << tr("Relocating %1 [%2]").arg(sourceEntry->title()).arg(sourceEntry->uuid().toHex());
+                changes << tr("Relocating %1 [%2]").arg(sourceEntry->title()).arg(sourceEntry->uuid().toString());
                 moveEntry(targetEntry, context.m_targetGroup);
             }
             changes << resolveEntryConflict(context, sourceEntry, targetEntry);
@@ -107,7 +107,7 @@ Merger::ChangeList Merger::mergeGroup(const MergeContext& context)
     for (Group* sourceChildGroup : sourceChildGroups) {
         Group* targetChildGroup = context.m_targetRootGroup->findGroupByUuid(sourceChildGroup->uuid());
         if (!targetChildGroup) {
-            changes << tr("Creating missing %1 [%2]").arg(sourceChildGroup->name()).arg(sourceChildGroup->uuid().toHex());
+            changes << tr("Creating missing %1 [%2]").arg(sourceChildGroup->name()).arg(sourceChildGroup->uuid().toString());
             targetChildGroup = sourceChildGroup->clone(Entry::CloneNoFlags, Group::CloneNoFlags);
             moveGroup(targetChildGroup, context.m_targetGroup);
             TimeInfo timeinfo = targetChildGroup->timeInfo();
@@ -117,7 +117,7 @@ Merger::ChangeList Merger::mergeGroup(const MergeContext& context)
             bool locationChanged =
                 targetChildGroup->timeInfo().locationChanged() < sourceChildGroup->timeInfo().locationChanged();
             if (locationChanged && targetChildGroup->parent() != context.m_targetGroup) {
-                changes << tr("Relocating %1 [%2]").arg(sourceChildGroup->name()).arg(sourceChildGroup->uuid().toHex());
+                changes << tr("Relocating %1 [%2]").arg(sourceChildGroup->name()).arg(sourceChildGroup->uuid().toString());
                 moveGroup(targetChildGroup, context.m_targetGroup);
                 TimeInfo timeinfo = targetChildGroup->timeInfo();
                 timeinfo.setLocationChanged(sourceChildGroup->timeInfo().locationChanged());
@@ -146,7 +146,7 @@ Merger::ChangeList Merger::resolveGroupConflict(const MergeContext& context, con
 
     // only if the other group is newer, update the existing one.
     if (timeExisting < timeOther) {
-        changes << tr("Overwriting %1 [%2]").arg(sourceChildGroup->name()).arg(sourceChildGroup->uuid().toHex());
+        changes << tr("Overwriting %1 [%2]").arg(sourceChildGroup->name()).arg(sourceChildGroup->uuid().toString());
         targetChildGroup->setName(sourceChildGroup->name());
         targetChildGroup->setNotes(sourceChildGroup->notes());
         if (sourceChildGroup->iconNumber() == 0) {
@@ -272,14 +272,14 @@ Merger::ChangeList Merger::resolveEntryConflict_Duplicate(const MergeContext& co
         markOlderEntry(targetEntry);
         changes << tr("Adding backup for older target %1 [%2]")
                    .arg(targetEntry->title())
-                   .arg(targetEntry->uuid().toHex());
+                   .arg(targetEntry->uuid().toString());
     } else if (comparison > 0) {
         Entry* clonedEntry = sourceEntry->clone(Entry::CloneNewUuid | Entry::CloneIncludeHistory);
         moveEntry(clonedEntry, context.m_targetGroup);
         markOlderEntry(clonedEntry);
         changes << tr("Adding backup for older source %1 [%2]")
                    .arg(sourceEntry->title())
-                   .arg(sourceEntry->uuid().toHex());
+                   .arg(sourceEntry->uuid().toString());
     }
     return changes;
 }
@@ -298,7 +298,7 @@ Merger::ChangeList Merger::resolveEntryConflict_KeepLocal(const MergeContext& co
         // old entry is an active change of the database!
         changes << tr("Reapplying older target entry on top of newer source %1 [%2]")
                    .arg(targetEntry->title())
-                   .arg(targetEntry->uuid().toHex());
+                   .arg(targetEntry->uuid().toString());
         Entry* agedTargetEntry = targetEntry->clone(Entry::CloneNoFlags);
         targetEntry->addHistoryItem(agedTargetEntry);
     }
@@ -319,7 +319,7 @@ Merger::ChangeList Merger::resolveEntryConflict_KeepRemote(const MergeContext& c
         // old entry is an active change of the database!
         changes << tr("Reapplying older source entry on top of newer target %1 [%2]")
                    .arg(targetEntry->title())
-                   .arg(targetEntry->uuid().toHex());
+                   .arg(targetEntry->uuid().toString());
         targetEntry->beginUpdate();
         targetEntry->copyDataFrom(sourceEntry);
         targetEntry->endUpdate();
@@ -344,7 +344,7 @@ Merger::ChangeList Merger::resolveEntryConflict_MergeHistories(const MergeContex
                qPrintable(currentGroup->name()));
         changes << tr("Synchronizing from newer source %1 [%2]")
                    .arg(targetEntry->title())
-                   .arg(targetEntry->uuid().toHex());
+                   .arg(targetEntry->uuid().toString());
         moveEntry(clonedEntry, currentGroup);
         mergeHistory(targetEntry, clonedEntry, mergeMethod);
         eraseEntry(targetEntry);
@@ -357,7 +357,7 @@ Merger::ChangeList Merger::resolveEntryConflict_MergeHistories(const MergeContex
         if (changed) {
             changes << tr("Synchronizing from older source %1 [%2]")
                        .arg(targetEntry->title())
-                       .arg(targetEntry->uuid().toHex());
+                       .arg(targetEntry->uuid().toString());
         }
     }
     return changes;
@@ -415,7 +415,7 @@ bool Merger::mergeHistory(const Entry* sourceEntry, Entry* targetEntry, Group::M
         if (merged.contains(modificationTime) && !merged[modificationTime]->equals(historyItem, CompareItemIgnoreMilliseconds)) {
             ::qWarning("Inconsistent history entry of %s[%s] at %s contains conflicting changes - conflict resolution may lose data!",
                        qPrintable(sourceEntry->title()),
-                       qPrintable(sourceEntry->uuid().toHex()),
+                       qPrintable(sourceEntry->uuid().toString()),
                        qPrintable(modificationTime.toString("yyyy-MM-dd HH-mm-ss-zzz")));
         }
         merged[modificationTime] = historyItem->clone(Entry::CloneNoFlags);
@@ -426,7 +426,7 @@ bool Merger::mergeHistory(const Entry* sourceEntry, Entry* targetEntry, Group::M
         if (merged.contains(modificationTime) && !merged[modificationTime]->equals(historyItem, CompareItemIgnoreMilliseconds)) {
             ::qWarning("History entry of %s[%s] at %s contains conflicting changes - conflict resolution may lose data!",
                 qPrintable(sourceEntry->title()),
-                qPrintable(sourceEntry->uuid().toHex()),
+                qPrintable(sourceEntry->uuid().toString()),
                 qPrintable(modificationTime.toString("yyyy-MM-dd HH-mm-ss-zzz")));
         }
         if (preferRemote && merged.contains(modificationTime)) {
@@ -443,7 +443,7 @@ bool Merger::mergeHistory(const Entry* sourceEntry, Entry* targetEntry, Group::M
     if (targetModificationTime == sourceModificationTime && !targetEntry->equals(sourceEntry, CompareItemIgnoreMilliseconds | CompareItemIgnoreHistory | CompareItemIgnoreLocation)) {
         ::qWarning("Entry of %s[%s] contains conflicting changes - conflict resolution may lose data!",
                    qPrintable(sourceEntry->title()),
-                   qPrintable(sourceEntry->uuid().toHex()));
+                   qPrintable(sourceEntry->uuid().toString()));
     }
 
     if (targetModificationTime < sourceModificationTime) {
@@ -515,7 +515,7 @@ Merger::ChangeList Merger::mergeDeletions(const MergeContext& context)
     const auto sourceDeletions = context.m_sourceDb->deletedObjects();
 
     QList<DeletedObject> deletions;
-    QMap<Uuid, DeletedObject> mergedDeletions;
+    QMap<QUuid, DeletedObject> mergedDeletions;
     QList<Entry*> entries;
     QList<Group*> groups;
 
@@ -550,9 +550,9 @@ Merger::ChangeList Merger::mergeDeletions(const MergeContext& context)
         }
         deletions << object;
         if (entry->group()) {
-            changes << tr("Deleting child %1 [%2]").arg(entry->title()).arg(entry->uuid().toHex());
+            changes << tr("Deleting child %1 [%2]").arg(entry->title()).arg(entry->uuid().toString());
         } else {
-            changes << tr("Deleting orphan %1 [%2]").arg(entry->title()).arg(entry->uuid().toHex());
+            changes << tr("Deleting orphan %1 [%2]").arg(entry->title()).arg(entry->uuid().toString());
         }
         // Entry is inserted into deletedObjects after deletions are processed
         eraseEntry(entry);
@@ -576,9 +576,9 @@ Merger::ChangeList Merger::mergeDeletions(const MergeContext& context)
         }
         deletions << object;
         if (group->parentGroup()) {
-            changes << tr("Deleting child %1 [%2]").arg(group->name()).arg(group->uuid().toHex());
+            changes << tr("Deleting child %1 [%2]").arg(group->name()).arg(group->uuid().toString());
         } else {
-            changes << tr("Deleting orphan %1 [%2]").arg(group->name()).arg(group->uuid().toHex());
+            changes << tr("Deleting orphan %1 [%2]").arg(group->name()).arg(group->uuid().toString());
         }
         eraseGroup(group);
     }
@@ -602,11 +602,11 @@ Merger::ChangeList Merger::mergeMetadata(const MergeContext& context)
     auto* sourceMetadata = context.m_sourceDb->metadata();
     auto* targetMetadata = context.m_targetDb->metadata();
 
-    for (Uuid customIconId : sourceMetadata->customIcons().keys()) {
+    for (const QUuid customIconId : sourceMetadata->customIcons().keys()) {
         QImage customIcon = sourceMetadata->customIcon(customIconId);
         if (!targetMetadata->containsCustomIcon(customIconId)) {
             targetMetadata->addCustomIcon(customIconId, customIcon);
-            changes << tr("Adding missing icon %1").arg(customIconId.toHex());
+            changes << tr("Adding missing icon %1").arg(customIconId.toString());
         }
     }
     return changes;

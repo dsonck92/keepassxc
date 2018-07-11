@@ -339,7 +339,7 @@ namespace KeeShareSettings
 
     Reference::Reference()
         : type(Inactive)
-        , uuid(Uuid::random())
+        , uuid(QUuid::createUuid())
     {
     }
 
@@ -388,7 +388,7 @@ namespace KeeShareSettings
             }
             writer.writeEndElement();
             writer.writeStartElement("Group");
-            writer.writeCharacters(reference.uuid.toBase64());
+            writer.writeCharacters(reference.uuid.toRfc4122().toBase64());
             writer.writeEndElement();
             writer.writeStartElement("Path");
             writer.writeCharacters(reference.path.toUtf8().toBase64());
@@ -417,7 +417,7 @@ namespace KeeShareSettings
                         }
                     }
                 } else if (reader.name() == "Group") {
-                    reference.uuid = Uuid::fromBase64(reader.readElementText());
+                    reference.uuid = QUuid::fromRfc4122(QByteArray::fromBase64(reader.readElementText().toLatin1()));
                 } else if (reader.name() == "Path") {
                     reference.path = QString::fromUtf8(QByteArray::fromBase64(reader.readElementText().toLatin1()));
                 } else if (reader.name() == "Password") {

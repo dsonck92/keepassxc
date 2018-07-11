@@ -25,7 +25,7 @@
 
 class CustomData;
 class TimeInfo;
-class Uuid;
+class QUuid;
 
 namespace Ui
 {
@@ -40,7 +40,7 @@ public:
     explicit EditWidgetProperties(QWidget* parent = nullptr);
     ~EditWidgetProperties();
 
-    void setFields(const TimeInfo& timeInfo, const Uuid& uuid);
+    void setFields(const TimeInfo& timeInfo, const QUuid& uuid);
     void setCustomData(CustomData* customData);
 
 private slots:

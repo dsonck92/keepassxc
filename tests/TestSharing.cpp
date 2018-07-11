@@ -42,7 +42,6 @@ Q_DECLARE_METATYPE(KeeShareSettings::Type)
 Q_DECLARE_METATYPE(KeeShareSettings::Key)
 Q_DECLARE_METATYPE(KeeShareSettings::Certificate)
 Q_DECLARE_METATYPE(QList<KeeShareSettings::Certificate>)
-Q_DECLARE_METATYPE(Uuid)
 
 void TestSharing::initTestCase()
 {
@@ -60,18 +59,18 @@ void TestSharing::testIdempotentDatabaseWriting()
 
     Group* sharingGroup = new Group();
     sharingGroup->setName("SharingGroup");
-    sharingGroup->setUuid(Uuid::random());
+    sharingGroup->setUuid(QUuid::createUuid());
     sharingGroup->setParent(db->rootGroup());
 
     Entry* entry1 = new Entry();
-    entry1->setUuid(Uuid::random());
+    entry1->setUuid(QUuid::createUuid());
     entry1->beginUpdate();
     entry1->setTitle("Entry1");
     entry1->endUpdate();
     entry1->setGroup(sharingGroup);
 
     Entry* entry2 = new Entry();
-    entry2->setUuid(Uuid::random());
+    entry2->setUuid(QUuid::createUuid());
     entry2->beginUpdate();
     entry2->setTitle("Entry2");
     entry2->endUpdate();
@@ -197,7 +196,7 @@ void TestSharing::testReferenceSerialization()
 {
     QFETCH(QString, password);
     QFETCH(QString, path);
-    QFETCH(Uuid, uuid);
+    QFETCH(QUuid, uuid);
     QFETCH(int, type);
     KeeShareSettings::Reference original;
     original.password = password;
@@ -218,11 +217,11 @@ void TestSharing::testReferenceSerialization_data()
 {
     QTest::addColumn<QString>("password");
     QTest::addColumn<QString>("path");
-    QTest::addColumn<Uuid>("uuid");
+    QTest::addColumn<QUuid>("uuid");
     QTest::addColumn<int>("type");
-    QTest::newRow("1") << "Password" << "/some/path" << Uuid::random() << int(KeeShareSettings::Inactive);
-    QTest::newRow("2") << "" << "" << Uuid() << int(KeeShareSettings::SynchronizeWith);
-    QTest::newRow("3") << "" << "/some/path" << Uuid() << int(KeeShareSettings::ExportTo);
+    QTest::newRow("1") << "Password" << "/some/path" << QUuid::createUuid() << int(KeeShareSettings::Inactive);
+    QTest::newRow("2") << "" << "" << QUuid() << int(KeeShareSettings::SynchronizeWith);
+    QTest::newRow("3") << "" << "/some/path" << QUuid() << int(KeeShareSettings::ExportTo);
 
 }
 

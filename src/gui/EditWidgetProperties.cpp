@@ -16,12 +16,14 @@
  */
 
 #include "EditWidgetProperties.h"
+
+#include <QUuid>
+
 #include "MessageBox.h"
 #include "ui_EditWidgetProperties.h"
 
 #include "core/CustomData.h"
 #include "core/TimeInfo.h"
-#include "core/Uuid.h"
 
 EditWidgetProperties::EditWidgetProperties(QWidget* parent)
     : QWidget(parent)
@@ -42,13 +44,13 @@ EditWidgetProperties::~EditWidgetProperties()
 {
 }
 
-void EditWidgetProperties::setFields(const TimeInfo& timeInfo, const Uuid& uuid)
+void EditWidgetProperties::setFields(const TimeInfo& timeInfo, const QUuid& uuid)
 {
     static const QString timeFormat("d MMM yyyy HH:mm:ss");
     m_ui->modifiedEdit->setText(timeInfo.lastModificationTime().toLocalTime().toString(timeFormat));
     m_ui->createdEdit->setText(timeInfo.creationTime().toLocalTime().toString(timeFormat));
     m_ui->accessedEdit->setText(timeInfo.lastAccessTime().toLocalTime().toString(timeFormat));
-    m_ui->uuidEdit->setText(uuid.toHex());
+    m_ui->uuidEdit->setText(uuid.toRfc4122());
 }
 
 void EditWidgetProperties::setCustomData(CustomData* customData)

@@ -1040,6 +1040,11 @@ void TestGui::testDatabaseLocking()
 
     QCOMPARE(m_tabWidget->tabText(0).remove('&'), origDbName + " [locked]");
 
+    QAction* actionDatabaseMerge = m_mainWindow->findChild<QAction*>("actionDatabaseMerge", Qt::FindChildrenRecursively);
+    QCOMPARE(actionDatabaseMerge->isEnabled(), false);
+    QAction* actionDatabaseSave = m_mainWindow->findChild<QAction*>("actionDatabaseSave", Qt::FindChildrenRecursively);
+    QCOMPARE(actionDatabaseSave->isEnabled(), false);
+
     QWidget* dbWidget = m_tabWidget->currentDatabaseWidget();
     QWidget* unlockDatabaseWidget = dbWidget->findChild<QWidget*>("unlockDatabaseWidget");
     QWidget* editPassword = unlockDatabaseWidget->findChild<QLineEdit*>("editPassword");
@@ -1049,6 +1054,9 @@ void TestGui::testDatabaseLocking()
     QTest::keyClick(editPassword, Qt::Key_Enter);
 
     QCOMPARE(m_tabWidget->tabText(0).remove('&'), origDbName);
+
+    actionDatabaseMerge = m_mainWindow->findChild<QAction*>("actionDatabaseMerge", Qt::FindChildrenRecursively);
+    QCOMPARE(actionDatabaseMerge->isEnabled(), true);
 }
 
 void TestGui::testDragAndDropKdbxFiles()

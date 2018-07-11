@@ -24,7 +24,6 @@
 #include <QObject>
 
 #include "config-keepassx.h"
-#include "core/Uuid.h"
 #include "crypto/kdf/Kdf.h"
 #include "keys/CompositeKey.h"
 
@@ -37,7 +36,7 @@ class QIODevice;
 
 struct DeletedObject
 {
-    Uuid uuid;
+    QUuid uuid;
     QDateTime deletionTime;
     bool operator==(const DeletedObject& other) const
     {
@@ -61,7 +60,7 @@ public:
 
     struct DatabaseData
     {
-        Uuid cipher;
+        QUuid cipher;
         CompressionAlgorithm compressionAlgo;
         QByteArray transformedMasterKey;
         QSharedPointer<Kdf> kdf;
@@ -88,19 +87,18 @@ public:
 
     Metadata* metadata();
     const Metadata* metadata() const;
-
-    Entry* resolveEntry(const Uuid& uuid) const;
+    Entry* resolveEntry(const QUuid& uuid) const;
     Entry* resolveEntry(const QString& text, EntryReferenceType referenceType);
-    Group* resolveGroup(const Uuid& uuid);
+    Group* resolveGroup(const QUuid& uuid);
     QList<DeletedObject> deletedObjects();
     const QList<DeletedObject>& deletedObjects() const;
     void addDeletedObject(const DeletedObject& delObj);
-    void addDeletedObject(const Uuid& uuid);
-    bool containsDeletedObject(const Uuid& uuid) const;
-    bool containsDeletedObject(const DeletedObject& uuid) const;
+    void addDeletedObject(const QUuid& uuid);
+    bool containsDeletedObject(const QUuid& uuid) const;
+    bool containsDeletedObject(const DeletedObject& delObj) const;
     void setDeletedObjects(const QList<DeletedObject>& delObjs);
 
-    Uuid cipher() const;
+    const QUuid& cipher() const;
     Database::CompressionAlgorithm compressionAlgo() const;
     QSharedPointer<Kdf> kdf() const;
     QByteArray transformedMasterKey() const;
@@ -108,7 +106,7 @@ public:
     QByteArray challengeResponseKey() const;
     bool challengeMasterSeed(const QByteArray& masterSeed);
 
-    void setCipher(const Uuid& cipher);
+    void setCipher(const QUuid& cipher);
     void setCompressionAlgo(Database::CompressionAlgorithm algo);
     void setKdf(QSharedPointer<Kdf> kdf);
     bool setKey(const CompositeKey& key, bool updateChangedTime = true, bool updateTransformSalt = false);
@@ -127,10 +125,10 @@ public:
     /**
      * Returns a unique id that is only valid as long as the Database exists.
      */
-    Uuid uuid();
+    const QUuid& uuid() const;
     bool changeKdf(QSharedPointer<Kdf> kdf);
 
-    static Database* databaseByUuid(const Uuid& uuid);
+    static Database* databaseByUuid(const QUuid& uuid);
     static Database* openDatabaseFile(QString fileName, CompositeKey key);
     static Database* unlockFromStdin(QString databaseFilename, QString keyFilename = QString(""));
 
@@ -150,9 +148,9 @@ private slots:
     void startModifiedTimer();
 
 private:
-    Entry* findEntryRecursive(const Uuid& uuid, Group* group) const;
+    Entry* findEntryRecursive(const QUuid& uuid, Group* group) const;
     Entry* findEntryRecursive(const QString& text, EntryReferenceType referenceType, Group* group);
-    Group* findGroupRecursive(const Uuid& uuid, Group* group);
+    Group* findGroupRecursive(const QUuid& uuid, Group* group);
 
     void createRecycleBin();
     QString writeDatabase(QIODevice* device);
@@ -165,8 +163,8 @@ private:
     DatabaseData m_data;
     bool m_emitModified;
 
-    Uuid m_uuid;
-    static QHash<Uuid, Database*> m_uuidMap;
+    QUuid m_uuid;
+    static QHash<QUuid, Database*> m_uuidMap;
 };
 
 #endif // KEEPASSX_DATABASE_H

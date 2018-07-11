@@ -24,7 +24,7 @@
 #include <QStackedWidget>
 #include <QTimer>
 
-#include "core/Uuid.h"
+#include "gui/entry/EntryModel.h"
 #include "gui/MessageWidget.h"
 #include "gui/csvImport/CsvImportWizard.h"
 #include "gui/entry/EntryModel.h"
@@ -202,7 +202,7 @@ private slots:
     void emitCurrentModeChanged();
     // Database autoreload slots
     void reloadDatabaseFile();
-    void restoreGroupEntryFocus(Uuid groupUuid, Uuid EntryUuid);
+    void restoreGroupEntryFocus(const QUuid& groupUuid, const QUuid& EntryUuid);
 
 private:
     void setClipboardTextAndMinimize(const QString& text);
@@ -232,8 +232,8 @@ private:
     Entry* m_newEntry;
     Group* m_newParent;
 
-    Uuid m_groupBeforeLock;
-    Uuid m_entryBeforeLock;
+    QUuid m_groupBeforeLock;
+    QUuid m_entryBeforeLock;
     MessageWidget* m_messageWidget;
     DetailsWidget* m_detailsView;
 

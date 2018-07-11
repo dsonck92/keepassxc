@@ -21,7 +21,6 @@
 #include <QMap>
 #include <QObject>
 
-#include "core/Uuid.h"
 #include "crypto/ssh/OpenSSHKey.h"
 
 class CustomData;
@@ -142,7 +141,7 @@ namespace KeeShareSettings
     struct Reference
     {
         Type type;
-        Uuid uuid;
+        QUuid uuid;
         QString path;
         QString password;
 

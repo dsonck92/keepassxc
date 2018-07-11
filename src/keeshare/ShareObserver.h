@@ -24,7 +24,6 @@
 #include <QStringList>
 #include <QTimer>
 
-#include "core/Uuid.h"
 #include "gui/MessageWidget.h"
 #include "keeshare/KeeShareSettings.h"
 
