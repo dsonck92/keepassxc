@@ -63,7 +63,8 @@ To use sharing, you need to enable it on a database.
 
 ### Sharing Credentials
 
-If you checked _Allow export_ in the Sharing settings you now are good to go to share some passwords with others. Sharing always is defined on a group. If you enable sharing on a group, every entry under this group or it's children is shared. If you enable sharing on the root node, **every password** inside your database gets shared!
+If you checked _Allow export_ in the Sharing settings you now are good to go to share some passwords with others. Sharing can only be set on groups. If you enable sharing on a group, every entry under this group or it's children is shared. If you enable sharing on the root node, **every password** inside your database gets shared!
+To share a group of passwords just:
 
 1. Open the edit sheet on a group you want to share
 1. Select the sharing section
@@ -71,13 +72,13 @@ If you checked _Allow export_ in the Sharing settings you now are good to go to 
 1. Choose a path to store the shared credentials to
 1. Generate a password for this share database
 
-The export file will not be generated automatically. Instead, each time the database is saved, the file gets written. If an old file is present, the old file will be overwritten! The file should be written to a location that is accessible by others. An easy setup is a network share or storing the file inside the cloud.
+The export file will not be generated automatically. Instead, each time the database is saved, the file gets written. If an old file is present, the old file will be overwritten! The file should be stored at a location that is accessible by others. An easy setup is a network share or storing the file inside the cloud.
 
 <img src="./KeeShare/Share-Group.png" height="600" width="800" alt="KeePassXC Group Sharing Settings">
 
 ### Using Shared Credentials
 
-Checking _Allow import_ in the Sharing settings of the database enables you to receive credentials from others. KeePass will watch sharing sources and import any changes immoderately into your database using the synchronization feature.
+Checking _Allow import_ in the Sharing settings of the database enables you to receive credentials from others. KeePass will watch sharing sources and import any changes immediately into your database using the synchronization feature.
 
 1. Create a group for import
 1. Open the edit sheet on that group
