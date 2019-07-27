@@ -64,7 +64,8 @@ namespace
         key->addKey(QSharedPointer<PasswordKey>::create(reference.password));
 
         // Copy the source root as the root of the export database, memory manage the old root node
-        auto* targetRoot = sourceRoot->clone(Entry::CloneNoFlags, Group::CloneNoFlags);
+        auto* targetRoot = sourceRoot->clone(
+            Entry::CloneNoFlags, reference.keep_structure ? Group::CloneIncludeEntries : Group::CloneNoFlags);
         const bool updateTimeinfo = targetRoot->canUpdateTimeinfo();
         targetRoot->setUpdateTimeinfo(false);
         KeeShare::setReferenceTo(targetRoot, KeeShareSettings::Reference());
@@ -72,10 +73,12 @@ namespace
         const auto sourceEntries = sourceRoot->entriesRecursive(false);
         for (const Entry* sourceEntry : sourceEntries) {
             auto* targetEntry = sourceEntry->clone(Entry::CloneIncludeHistory);
-            const bool updateTimeinfo = targetEntry->canUpdateTimeinfo();
+            const bool updateEntryTimeinfo = targetEntry->canUpdateTimeinfo();
             targetEntry->setUpdateTimeinfo(false);
-            targetEntry->setGroup(targetRoot);
-            targetEntry->setUpdateTimeinfo(updateTimeinfo);
+            if (!reference.keep_structure) {
+                targetEntry->setGroup(targetRoot);
+            }
+            targetEntry->setUpdateTimeinfo(updateEntryTimeinfo);
             const auto iconUuid = targetEntry->iconUuid();
             if (!iconUuid.isNull() && !targetMetadata->containsCustomIcon(iconUuid)) {
                 targetMetadata->addCustomIcon(iconUuid, sourceEntry->icon());

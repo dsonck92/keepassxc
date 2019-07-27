@@ -56,6 +56,8 @@ EditGroupWidgetKeeShare::EditGroupWidgetKeeShare(QWidget* parent)
     connect(m_ui->typeComboBox, SIGNAL(currentIndexChanged(int)), SLOT(selectType()));
     connect(m_ui->clearButton, SIGNAL(clicked(bool)), SLOT(clearInputs()));
 
+    connect(m_ui->keepStructureCheckBox, SIGNAL(clicked(bool)), SLOT(toggleKeepStructure(bool)));
+
     connect(KeeShare::instance(), SIGNAL(activeChanged()), SLOT(showSharingState()));
 
     const auto types = QList<KeeShareSettings::Type>()
@@ -198,6 +200,7 @@ void EditGroupWidgetKeeShare::update()
         m_ui->typeComboBox->setCurrentIndex(reference.type);
         m_ui->passwordEdit->setText(reference.password);
         m_ui->pathEdit->setText(reference.path);
+        m_ui->keepStructureCheckBox->setChecked(reference.keep_structure);
 
         showSharingState();
     }
@@ -352,5 +355,14 @@ void EditGroupWidgetKeeShare::selectType()
     }
     auto reference = KeeShare::referenceOf(m_temporaryGroup);
     reference.type = static_cast<KeeShareSettings::Type>(m_ui->typeComboBox->currentData().toInt());
+    KeeShare::setReferenceTo(m_temporaryGroup, reference);
+}
+void EditGroupWidgetKeeShare::toggleKeepStructure(bool checked)
+{
+    if (!m_temporaryGroup) {
+        return;
+    }
+    auto reference = KeeShare::referenceOf(m_temporaryGroup);
+    reference.keep_structure = checked;
     KeeShare::setReferenceTo(m_temporaryGroup, reference);
 }

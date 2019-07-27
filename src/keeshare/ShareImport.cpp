@@ -268,6 +268,19 @@ namespace
             return {reference.path, ShareObserver::Result::Error, reader.errorString()};
         }
 
+        if (!reference.keep_structure) {
+            // Flatten input structure
+            Group* sourceRoot = sourceDb->rootGroup();
+
+            const auto sourceEntries = sourceRoot->entriesRecursive(false);
+            for (Entry* targetEntry : sourceEntries) {
+                const bool updateTimeinfo = targetEntry->canUpdateTimeinfo();
+                targetEntry->setUpdateTimeinfo(false);
+                targetEntry->setGroup(sourceRoot);
+                targetEntry->setUpdateTimeinfo(updateTimeinfo);
+            }
+        }
+
         auto foreign = KeeShare::foreign();
         const auto own = KeeShare::own();
         const auto sign = KeeShareSettings::Sign(); // invalid sign

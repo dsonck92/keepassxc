@@ -51,6 +51,7 @@ private slots:
     void selectPath();
     void setGeneratedPassword(const QString& password);
     void togglePasswordGeneratorButton(bool checked);
+    void toggleKeepStructure(bool checked);
 
 private:
     QScopedPointer<Ui::EditGroupWidgetKeeShare> m_ui;

@@ -164,6 +164,7 @@ namespace KeeShareSettings
         QUuid uuid;
         QString path;
         QString password;
+        bool keep_structure;
 
         Reference();
         bool isNull() const;

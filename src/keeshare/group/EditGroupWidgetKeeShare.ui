@@ -39,7 +39,24 @@
       </widget>
      </item>
      <item row="2" column="1">
-      <widget class="QComboBox" name="typeComboBox"/>
+      <layout class="QHBoxLayout" name="typeLayout">
+       <item>
+        <widget class="QComboBox" name="typeComboBox"/>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="keepStructureCheckBox">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="text">
+          <string>Keep Structure</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </item>
      <item row="3" column="0">
       <widget class="QLabel" name="pathLabel">

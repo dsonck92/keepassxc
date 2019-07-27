@@ -376,6 +376,7 @@ namespace KeeShareSettings
     Reference::Reference()
         : type(Inactive)
         , uuid(QUuid::createUuid())
+        , keep_structure(false)
     {
     }
 
@@ -404,12 +405,17 @@ namespace KeeShareSettings
         if (type != other.type) {
             return type < other.type;
         }
+        if (keep_structure != other.keep_structure) {
+            return keep_structure < other.keep_structure;
+        }
+
         return path < other.path;
     }
 
     bool Reference::operator==(const Reference& other) const
     {
-        return path == other.path && uuid == other.uuid && password == other.password && type == other.type;
+        return path == other.path && uuid == other.uuid && password == other.password && type == other.type
+               && keep_structure == other.keep_structure;
     }
 
     QString Reference::serialize(const Reference& reference)
@@ -432,6 +438,9 @@ namespace KeeShareSettings
             writer.writeStartElement("Password");
             writer.writeCharacters(reference.password.toUtf8().toBase64());
             writer.writeEndElement();
+            if ((reference.keep_structure)) {
+                writer.writeEmptyElement("KeepStructure");
+            }
         });
     }
 
@@ -449,6 +458,7 @@ namespace KeeShareSettings
                             reference.type |= ExportTo;
                             reader.skipCurrentElement();
                         } else {
+                            reader.skipCurrentElement();
                             break;
                         }
                     }
@@ -458,6 +468,9 @@ namespace KeeShareSettings
                     reference.path = QString::fromUtf8(QByteArray::fromBase64(reader.readElementText().toLatin1()));
                 } else if (reader.name() == "Password") {
                     reference.password = QString::fromUtf8(QByteArray::fromBase64(reader.readElementText().toLatin1()));
+                } else if (reader.name() == "KeepStructure") {
+                    reference.keep_structure = true;
+                    reader.skipCurrentElement();
                 } else {
                     ::qWarning() << "Unknown Reference element" << reader.name();
                     reader.skipCurrentElement();
