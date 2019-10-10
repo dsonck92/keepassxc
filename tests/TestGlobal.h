@@ -19,21 +19,12 @@
 #define KEEPASSXC_TESTGLOBAL_H
 
 #include "core/Group.h"
-#include "core/Uuid.h"
 
 #include <QDateTime>
 #include <QTest>
 
 namespace QTest
 {
-
-    template <> inline char* toString(const Uuid& uuid)
-    {
-        QByteArray ba = "Uuid(";
-        ba += uuid.toHex().toLatin1().constData();
-        ba += ")";
-        return qstrdup(ba.constData());
-    }
 
     template <> inline char* toString(const Group::TriState& triState)
     {
@@ -51,15 +42,5 @@ namespace QTest
     }
 
 } // namespace QTest
-
-namespace Test
-{
-
-    inline QDateTime datetime(int year, int month, int day, int hour, int min, int second)
-    {
-        return QDateTime(QDate(year, month, day), QTime(hour, min, second), Qt::UTC);
-    }
-
-} // namespace Test
 
 #endif // KEEPASSXC_TESTGLOBAL_H

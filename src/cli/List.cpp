@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2017 KeePassXC Team <team@keepassxc.org>
+ *  Copyright (C) 2019 KeePassXC Team <team@keepassxc.org>
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -19,72 +19,54 @@
 #include <stdio.h>
 
 #include "List.h"
+#include "cli/Utils.h"
 
-#include <QCommandLineParser>
-#include <QTextStream>
-
+#include "cli/TextStream.h"
 #include "core/Database.h"
 #include "core/Entry.h"
 #include "core/Group.h"
+
+const QCommandLineOption List::RecursiveOption =
+    QCommandLineOption(QStringList() << "R"
+                                     << "recursive",
+                       QObject::tr("Recursively list the elements of the group."));
+
+const QCommandLineOption List::FlattenOption = QCommandLineOption(QStringList() << "f"
+                                                                                << "flatten",
+                                                                  QObject::tr("Flattens the output to single lines."));
 
 List::List()
 {
     name = QString("ls");
     description = QObject::tr("List database entries.");
+    options.append(List::RecursiveOption);
+    options.append(List::FlattenOption);
+    optionalArguments.append(
+        {QString("group"), QObject::tr("Path of the group to list. Default is /"), QString("[group]")});
 }
 
-List::~List()
+int List::executeWithDatabase(QSharedPointer<Database> database, QSharedPointer<QCommandLineParser> parser)
 {
-}
+    TextStream outputTextStream(Utils::STDOUT, QIODevice::WriteOnly);
+    TextStream errorTextStream(Utils::STDERR, QIODevice::WriteOnly);
 
-int List::execute(const QStringList& arguments)
-{
-    QTextStream out(stdout);
+    const QStringList args = parser->positionalArguments();
+    bool recursive = parser->isSet(List::RecursiveOption);
+    bool flatten = parser->isSet(List::FlattenOption);
 
-    QCommandLineParser parser;
-    parser.setApplicationDescription(this->description);
-    parser.addPositionalArgument("database", QObject::tr("Path of the database."));
-    parser.addPositionalArgument("group", QObject::tr("Path of the group to list. Default is /"), QString("[group]"));
-    QCommandLineOption keyFile(QStringList() << "k"
-                                             << "key-file",
-                               QObject::tr("Key file of the database."),
-                               QObject::tr("path"));
-    parser.addOption(keyFile);
-    parser.process(arguments);
-
-    const QStringList args = parser.positionalArguments();
-    if (args.size() != 1 && args.size() != 2) {
-        out << parser.helpText().replace("keepassxc-cli", "keepassxc-cli ls");
-        return EXIT_FAILURE;
-    }
-
-    Database* db = Database::unlockFromStdin(args.at(0), parser.value(keyFile));
-    if (db == nullptr) {
-        return EXIT_FAILURE;
-    }
-
-    if (args.size() == 2) {
-        return this->listGroup(db, args.at(1));
-    }
-    return this->listGroup(db);
-}
-
-int List::listGroup(Database* database, QString groupPath)
-{
-    QTextStream outputTextStream(stdout, QIODevice::WriteOnly);
-    if (groupPath.isEmpty()) {
-        outputTextStream << database->rootGroup()->print();
-        outputTextStream.flush();
+    // No group provided, defaulting to root group.
+    if (args.size() == 1) {
+        outputTextStream << database->rootGroup()->print(recursive, flatten) << flush;
         return EXIT_SUCCESS;
     }
 
+    QString groupPath = args.at(1);
     Group* group = database->rootGroup()->findGroupByPath(groupPath);
-    if (group == nullptr) {
-        qCritical("Cannot find group %s.", qPrintable(groupPath));
+    if (!group) {
+        errorTextStream << QObject::tr("Cannot find group %1.").arg(groupPath) << endl;
         return EXIT_FAILURE;
     }
 
-    outputTextStream << group->print();
-    outputTextStream.flush();
+    outputTextStream << group->print(recursive, flatten) << flush;
     return EXIT_SUCCESS;
 }

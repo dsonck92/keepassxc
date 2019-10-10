@@ -20,16 +20,15 @@
 #include <QFile>
 #include <QTextStream>
 
+#include "cli/Utils.h"
 #include "config-keepassx.h"
+#include "core/Bootstrap.h"
 #include "core/Config.h"
 #include "core/Tools.h"
-#include "core/Translator.h"
 #include "crypto/Crypto.h"
 #include "gui/Application.h"
 #include "gui/MainWindow.h"
 #include "gui/MessageBox.h"
-
-#include "cli/Utils.h"
 
 #if defined(WITH_ASAN) && defined(WITH_LSAN)
 #include <sanitizer/lsan_interface.h>
@@ -40,135 +39,106 @@
 
 #if defined(Q_OS_WIN)
 Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin)
-#elif defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
+#elif defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
 Q_IMPORT_PLUGIN(QXcbIntegrationPlugin)
 #endif
 #endif
 
-static inline void earlyQNetworkAccessManagerWorkaround()
-{
-    // When QNetworkAccessManager is instantiated it regularly starts polling
-    // all network interfaces to see if anything changes and if so, what. This
-    // creates a latency spike every 10 seconds on Mac OS 10.12+ and Windows 7 >=
-    // when on a wifi connection.
-    // So here we disable it for lack of better measure.
-    // This will also cause this message: QObject::startTimer: Timers cannot
-    // have negative intervals
-    // For more info see:
-    // - https://bugreports.qt.io/browse/QTBUG-40332
-    // - https://bugreports.qt.io/browse/QTBUG-46015
-    qputenv("QT_BEARER_POLL_TIMEOUT", QByteArray::number(-1));
-}
-
 int main(int argc, char** argv)
 {
-#ifdef QT_NO_DEBUG
-    Tools::disableCoreDumps();
-#endif
-    Tools::setupSearchPaths();
+    QT_REQUIRE_VERSION(argc, argv, QT_VERSION_STR)
 
-    earlyQNetworkAccessManagerWorkaround();
+#if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
+    QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+#ifdef Q_OS_LINUX
+    QGuiApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+#endif
+#endif
+#ifdef Q_OS_LINUX
+    if (qgetenv("XDG_SESSION_TYPE") == QByteArrayLiteral("wayland") && qgetenv("QT_QPA_PLATFORM").isEmpty()) {
+        qWarning() << "Warning: disregarding XDG_SESSION_TYPE=wayland";
+        qWarning() << "To use wayland anyway, please set QT_QPA_PLATFORM=wayland";
+        qunsetenv("XDG_SESSION_TYPE");
+    }
+#endif
 
     Application app(argc, argv);
     Application::setApplicationName("keepassxc");
-    Application::setApplicationVersion(KEEPASSX_VERSION);
+    Application::setApplicationVersion(KEEPASSXC_VERSION);
     // don't set organizationName as that changes the return value of
     // QStandardPaths::writableLocation(QDesktopServices::DataLocation)
+    Bootstrap::bootstrapApplication();
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(
-        QCoreApplication::translate("main", "KeePassXC - cross-platform password manager"));
+    parser.setApplicationDescription(QObject::tr("KeePassXC - cross-platform password manager"));
     parser.addPositionalArgument(
-        "filename",
-        QCoreApplication::translate("main", "filenames of the password databases to open (*.kdbx)"),
-        "[filename(s)]");
+        "filename", QObject::tr("filenames of the password databases to open (*.kdbx)"), "[filename(s)]");
 
-    QCommandLineOption configOption(
-        "config", QCoreApplication::translate("main", "path to a custom config file"), "config");
-    QCommandLineOption keyfileOption(
-        "keyfile", QCoreApplication::translate("main", "key file of the database"), "keyfile");
-    QCommandLineOption pwstdinOption("pw-stdin",
-                                     QCoreApplication::translate("main", "read password of the database from stdin"));
+    QCommandLineOption configOption("config", QObject::tr("path to a custom config file"), "config");
+    QCommandLineOption keyfileOption("keyfile", QObject::tr("key file of the database"), "keyfile");
+    QCommandLineOption pwstdinOption("pw-stdin", QObject::tr("read password of the database from stdin"));
     // This is needed under Windows where clients send --parent-window parameter with Native Messaging connect method
     QCommandLineOption parentWindowOption(QStringList() << "pw"
                                                         << "parent-window",
-                                          QCoreApplication::translate("main", "Parent window handle"),
+                                          QObject::tr("Parent window handle"),
                                           "handle");
 
-    parser.addHelpOption();
-    parser.addVersionOption();
+    QCommandLineOption helpOption = parser.addHelpOption();
+    QCommandLineOption versionOption = parser.addVersionOption();
+    QCommandLineOption debugInfoOption(QStringList() << "debug-info", QObject::tr("Displays debugging information."));
     parser.addOption(configOption);
     parser.addOption(keyfileOption);
     parser.addOption(pwstdinOption);
     parser.addOption(parentWindowOption);
+    parser.addOption(debugInfoOption);
 
     parser.process(app);
+
+    // Don't try and do anything with the application if we're only showing the help / version
+    if (parser.isSet(versionOption) || parser.isSet(helpOption)) {
+        return EXIT_SUCCESS;
+    }
+
     const QStringList fileNames = parser.positionalArguments();
 
     if (app.isAlreadyRunning()) {
         if (!fileNames.isEmpty()) {
             app.sendFileNamesToRunningInstance(fileNames);
         }
-        qWarning() << QCoreApplication::translate("Main", "Another instance of KeePassXC is already running.")
-                          .toUtf8()
-                          .constData();
-        return 0;
+        qWarning() << QObject::tr("Another instance of KeePassXC is already running.").toUtf8().constData();
+        return EXIT_SUCCESS;
     }
 
     QApplication::setQuitOnLastWindowClosed(false);
 
     if (!Crypto::init()) {
-        QString error = QCoreApplication::translate("Main", "Fatal error while testing the cryptographic functions.");
+        QString error = QObject::tr("Fatal error while testing the cryptographic functions.");
         error.append("\n");
         error.append(Crypto::errorString());
-        MessageBox::critical(nullptr, QCoreApplication::translate("Main", "KeePassXC - Error"), error);
-        return 1;
+        MessageBox::critical(nullptr, QObject::tr("KeePassXC - Error"), error);
+        return EXIT_FAILURE;
+    }
+
+    // Displaying the debugging informations must be done after Crypto::init,
+    // to make sure we know which libgcrypt version is used.
+    if (parser.isSet(debugInfoOption)) {
+        QTextStream out(stdout, QIODevice::WriteOnly);
+        QString debugInfo = Tools::debugInfo().append("\n").append(Crypto::debugInfo());
+        out << debugInfo << endl;
+        return EXIT_SUCCESS;
     }
 
     if (parser.isSet(configOption)) {
         Config::createConfigFromFile(parser.value(configOption));
     }
 
-    Translator::installTranslators();
-
-#ifdef Q_OS_MAC
-    // Don't show menu icons on OSX
-    QApplication::setAttribute(Qt::AA_DontShowIconsInMenus);
-#endif
-
     MainWindow mainWindow;
-    app.setMainWindow(&mainWindow);
-
     QObject::connect(&app, SIGNAL(anotherInstanceStarted()), &mainWindow, SLOT(bringToFront()));
     QObject::connect(&app, SIGNAL(applicationActivated()), &mainWindow, SLOT(bringToFront()));
     QObject::connect(&app, SIGNAL(openFile(QString)), &mainWindow, SLOT(openDatabase(QString)));
     QObject::connect(&app, SIGNAL(quitSignalReceived()), &mainWindow, SLOT(appExit()), Qt::DirectConnection);
 
-    // start minimized if configured
-    bool minimizeOnStartup = config()->get("GUI/MinimizeOnStartup").toBool();
-    bool minimizeToTray = config()->get("GUI/MinimizeToTray").toBool();
-#ifndef Q_OS_LINUX
-    if (minimizeOnStartup) {
-#else
-    // On some Linux systems, the window should NOT be minimized and hidden (i.e. not shown), at
-    // the same time (which would happen if both minimize on startup and minimize to tray are set)
-    // since otherwise it causes problems on restore as seen on issue #1595. Hiding it is enough.
-    if (minimizeOnStartup && !minimizeToTray) {
-#endif
-        mainWindow.setWindowState(Qt::WindowMinimized);
-    }
-    if (!(minimizeOnStartup && minimizeToTray)) {
-        mainWindow.show();
-    }
-
-    if (config()->get("OpenPreviousDatabasesOnStartup").toBool()) {
-        const QStringList fileNames = config()->get("LastOpenedDatabases").toStringList();
-        for (const QString& filename : fileNames) {
-            if (!filename.isEmpty() && QFile::exists(filename)) {
-                mainWindow.openDatabase(filename);
-            }
-        }
-    }
+    Bootstrap::restoreMainWindowState(mainWindow);
 
     const bool pwstdin = parser.isSet(pwstdinOption);
     for (const QString& filename : fileNames) {
@@ -176,9 +146,8 @@ int main(int argc, char** argv)
         if (pwstdin) {
             // we always need consume a line of STDIN if --pw-stdin is set to clear out the
             // buffer for native messaging, even if the specified file does not exist
-            static QTextStream in(stdin, QIODevice::ReadOnly);
-            static QTextStream out(stdout, QIODevice::WriteOnly);
-            out << QCoreApplication::translate("Main", "Database password: ") << flush;
+            QTextStream out(stdout, QIODevice::WriteOnly);
+            out << QObject::tr("Database password: ") << flush;
             password = Utils::getPassword();
         }
 
@@ -187,7 +156,7 @@ int main(int argc, char** argv)
         }
     }
 
-    int exitCode = app.exec();
+    int exitCode = Application::exec();
 
 #if defined(WITH_ASAN) && defined(WITH_LSAN)
     // do leak check here to prevent massive tail of end-of-process leak errors from third-party libraries

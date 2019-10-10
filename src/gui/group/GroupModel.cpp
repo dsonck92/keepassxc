@@ -25,6 +25,7 @@
 #include "core/Group.h"
 #include "core/Metadata.h"
 #include "core/Tools.h"
+#include "keeshare/KeeShare.h"
 
 GroupModel::GroupModel(Database* db, QObject* parent)
     : QAbstractItemModel(parent)
@@ -37,19 +38,17 @@ void GroupModel::changeDatabase(Database* newDb)
 {
     beginResetModel();
 
-    if (m_db) {
-        m_db->disconnect(this);
-    }
-
     m_db = newDb;
 
+    // clang-format off
     connect(m_db, SIGNAL(groupDataChanged(Group*)), SLOT(groupDataChanged(Group*)));
-    connect(m_db, SIGNAL(groupAboutToAdd(Group*, int)), SLOT(groupAboutToAdd(Group*, int)));
+    connect(m_db, SIGNAL(groupAboutToAdd(Group*,int)), SLOT(groupAboutToAdd(Group*,int)));
     connect(m_db, SIGNAL(groupAdded()), SLOT(groupAdded()));
     connect(m_db, SIGNAL(groupAboutToRemove(Group*)), SLOT(groupAboutToRemove(Group*)));
     connect(m_db, SIGNAL(groupRemoved()), SLOT(groupRemoved()));
-    connect(m_db, SIGNAL(groupAboutToMove(Group*, Group*, int)), SLOT(groupAboutToMove(Group*, Group*, int)));
+    connect(m_db, SIGNAL(groupAboutToMove(Group*,Group*,int)), SLOT(groupAboutToMove(Group*,Group*,int)));
     connect(m_db, SIGNAL(groupMoved()), SLOT(groupMoved()));
+    // clang-format on
 
     endResetModel();
 }
@@ -125,13 +124,18 @@ QVariant GroupModel::data(const QModelIndex& index, int role) const
     Group* group = groupFromIndex(index);
 
     if (role == Qt::DisplayRole) {
-        return group->name();
+        QString nameTemplate = "%1";
+#if defined(WITH_XC_KEESHARE)
+        nameTemplate = KeeShare::indicatorSuffix(group, nameTemplate);
+#endif
+        return nameTemplate.arg(group->name());
     } else if (role == Qt::DecorationRole) {
-        if (group->isExpired()) {
-            return databaseIcons()->iconPixmap(DatabaseIcons::ExpiredIconIndex);
-        } else {
-            return group->iconScaledPixmap();
-        }
+        QPixmap pixmap = group->isExpired() ? databaseIcons()->iconPixmap(DatabaseIcons::ExpiredIconIndex)
+                                            : group->iconScaledPixmap();
+#if defined(WITH_XC_KEESHARE)
+        pixmap = KeeShare::indicatorBadge(group, pixmap);
+#endif
+        return pixmap;
     } else if (role == Qt::FontRole) {
         QFont font;
         if (group->isExpired()) {
@@ -224,8 +228,8 @@ bool GroupModel::dropMimeData(const QMimeData* data,
     Group* parentGroup = groupFromIndex(parent);
 
     if (isGroup) {
-        Uuid dbUuid;
-        Uuid groupUuid;
+        QUuid dbUuid;
+        QUuid groupUuid;
         stream >> dbUuid >> groupUuid;
 
         Database* db = Database::databaseByUuid(dbUuid);
@@ -233,12 +237,12 @@ bool GroupModel::dropMimeData(const QMimeData* data,
             return false;
         }
 
-        Group* dragGroup = db->resolveGroup(groupUuid);
-        if (!dragGroup || !Tools::hasChild(db, dragGroup) || dragGroup == db->rootGroup()) {
+        Group* dragGroup = db->rootGroup()->findGroupByUuid(groupUuid);
+        if (!dragGroup || !db->rootGroup()->findGroupByUuid(dragGroup->uuid()) || dragGroup == db->rootGroup()) {
             return false;
         }
 
-        if (dragGroup == parentGroup || Tools::hasChild(dragGroup, parentGroup)) {
+        if (dragGroup == parentGroup || dragGroup->findGroupByUuid(parentGroup->uuid())) {
             return false;
         }
 
@@ -257,7 +261,7 @@ bool GroupModel::dropMimeData(const QMimeData* data,
         Database* targetDb = parentGroup->database();
 
         if (sourceDb != targetDb) {
-            QSet<Uuid> customIcons = group->customIconsRecursive();
+            QSet<QUuid> customIcons = group->customIconsRecursive();
             targetDb->metadata()->copyCustomIcons(customIcons, sourceDb->metadata());
         }
 
@@ -268,8 +272,8 @@ bool GroupModel::dropMimeData(const QMimeData* data,
         }
 
         while (!stream.atEnd()) {
-            Uuid dbUuid;
-            Uuid entryUuid;
+            QUuid dbUuid;
+            QUuid entryUuid;
             stream >> dbUuid >> entryUuid;
 
             Database* db = Database::databaseByUuid(dbUuid);
@@ -277,8 +281,8 @@ bool GroupModel::dropMimeData(const QMimeData* data,
                 continue;
             }
 
-            Entry* dragEntry = db->resolveEntry(entryUuid);
-            if (!dragEntry || !Tools::hasChild(db, dragEntry)) {
+            Entry* dragEntry = db->rootGroup()->findEntryByUuid(entryUuid);
+            if (!dragEntry || !db->rootGroup()->findEntryByUuid(dragEntry->uuid())) {
                 continue;
             }
 
@@ -291,7 +295,7 @@ bool GroupModel::dropMimeData(const QMimeData* data,
 
             Database* sourceDb = dragEntry->group()->database();
             Database* targetDb = parentGroup->database();
-            Uuid customIcon = entry->iconUuid();
+            QUuid customIcon = entry->iconUuid();
 
             if (sourceDb != targetDb && !customIcon.isNull() && !targetDb->metadata()->containsCustomIcon(customIcon)) {
                 targetDb->metadata()->addCustomIcon(customIcon, sourceDb->metadata()->customIcon(customIcon));
@@ -405,4 +409,31 @@ void GroupModel::groupAboutToMove(Group* group, Group* toGroup, int pos)
 void GroupModel::groupMoved()
 {
     endMoveRows();
+}
+
+void GroupModel::sortChildren(Group* rootGroup, bool reverse)
+{
+    emit layoutAboutToBeChanged();
+
+    QList<QModelIndex> oldIndexes;
+    collectIndexesRecursively(oldIndexes, rootGroup->children());
+
+    rootGroup->sortChildrenRecursively(reverse);
+
+    QList<QModelIndex> newIndexes;
+    collectIndexesRecursively(newIndexes, rootGroup->children());
+
+    for (int i = 0; i < oldIndexes.count(); i++) {
+        changePersistentIndex(oldIndexes[i], newIndexes[i]);
+    }
+
+    emit layoutChanged();
+}
+
+void GroupModel::collectIndexesRecursively(QList<QModelIndex>& indexes, QList<Group*> groups)
+{
+    for (auto group : groups) {
+        indexes.append(index(group));
+        collectIndexesRecursively(indexes, group->children());
+    }
 }

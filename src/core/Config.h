@@ -38,15 +38,20 @@ public:
     void set(const QString& key, const QVariant& value);
     bool hasAccessError();
     void sync();
+    void resetToDefaults();
 
     static Config* instance();
     static void createConfigFromFile(const QString& file);
     static void createTempFileInstance();
 
+signals:
+    void changed(const QString& key);
+
 private:
     Config(const QString& fileName, QObject* parent);
     explicit Config(QObject* parent);
     void init(const QString& fileName);
+    void upgrade();
 
     static Config* m_instance;
 

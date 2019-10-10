@@ -30,21 +30,20 @@ class Kdbx4Reader : public KdbxReader
     Q_DECLARE_TR_FUNCTIONS(Kdbx4Reader)
 
 public:
-    Database* readDatabaseImpl(QIODevice* device,
-                               const QByteArray& headerData,
-                               const CompositeKey& key,
-                               bool keepDatabase) override;
-    QHash<QByteArray, QString> binaryPoolInverse() const;
+    bool readDatabaseImpl(QIODevice* device,
+                          const QByteArray& headerData,
+                          QSharedPointer<const CompositeKey> key,
+                          Database* db) override;
     QHash<QString, QByteArray> binaryPool() const;
 
 protected:
-    bool readHeaderField(StoreDataStream& headerStream) override;
+    bool readHeaderField(StoreDataStream& headerStream, Database* db) override;
 
 private:
     bool readInnerHeaderField(QIODevice* device);
     QVariantMap readVariantMap(QIODevice* device);
 
-    QHash<QByteArray, QString> m_binaryPoolInverse;
+    QHash<QString, QByteArray> m_binaryPool;
 };
 
 #endif // KEEPASSX_KDBX4READER_H

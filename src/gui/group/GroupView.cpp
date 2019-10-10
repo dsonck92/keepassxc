@@ -20,6 +20,7 @@
 #include <QDragMoveEvent>
 #include <QMetaObject>
 #include <QMimeData>
+#include <QShortcut>
 
 #include "core/Database.h"
 #include "core/Group.h"
@@ -34,14 +35,15 @@ GroupView::GroupView(Database* db, QWidget* parent)
     setHeaderHidden(true);
     setUniformRowHeights(true);
 
-    connect(this, SIGNAL(expanded(QModelIndex)), this, SLOT(expandedChanged(QModelIndex)));
-    connect(this, SIGNAL(collapsed(QModelIndex)), this, SLOT(expandedChanged(QModelIndex)));
-    connect(m_model, SIGNAL(rowsInserted(QModelIndex, int, int)), SLOT(syncExpandedState(QModelIndex, int, int)));
+    // clang-format off
+    connect(this, SIGNAL(expanded(QModelIndex)), SLOT(expandedChanged(QModelIndex)));
+    connect(this, SIGNAL(collapsed(QModelIndex)), SLOT(expandedChanged(QModelIndex)));
+    connect(m_model, SIGNAL(rowsInserted(QModelIndex,int,int)), SLOT(syncExpandedState(QModelIndex,int,int)));
     connect(m_model, SIGNAL(modelReset()), SLOT(modelReset()));
+    connect(selectionModel(), SIGNAL(currentChanged(QModelIndex,QModelIndex)), SLOT(emitGroupChanged()));
+    // clang-format on
 
-    connect(selectionModel(), SIGNAL(currentChanged(QModelIndex, QModelIndex)), SLOT(emitGroupChanged()));
-
-    connect(this, SIGNAL(clicked(QModelIndex)), SLOT(emitGroupPressed(QModelIndex)));
+    new QShortcut(Qt::CTRL + Qt::Key_F10, this, SLOT(contextMenuShortcutPressed()), nullptr, Qt::WidgetShortcut);
 
     modelReset();
 
@@ -51,9 +53,17 @@ GroupView::GroupView(Database* db, QWidget* parent)
     setDefaultDropAction(Qt::MoveAction);
 }
 
-void GroupView::changeDatabase(Database* newDb)
+void GroupView::contextMenuShortcutPressed()
 {
-    m_model->changeDatabase(newDb);
+    auto index = currentIndex();
+    if (hasFocus() && index.isValid()) {
+        emit customContextMenuRequested(visualRect(index).bottomLeft());
+    }
+}
+
+void GroupView::changeDatabase(const QSharedPointer<Database>& newDb)
+{
+    m_model->changeDatabase(newDb.data());
 }
 
 void GroupView::dragMoveEvent(QDragMoveEvent* event)
@@ -71,6 +81,12 @@ void GroupView::dragMoveEvent(QDragMoveEvent* event)
         && (dropIndicatorPosition() == AboveItem || dropIndicatorPosition() == BelowItem)) {
         event->ignore();
     }
+}
+
+void GroupView::focusInEvent(QFocusEvent* event)
+{
+    emitGroupChanged();
+    QTreeView::focusInEvent(event);
 }
 
 Group* GroupView::currentGroup()
@@ -110,9 +126,12 @@ void GroupView::expandGroup(Group* group, bool expand)
     setExpanded(index, expand);
 }
 
-void GroupView::emitGroupChanged(const QModelIndex& index)
+void GroupView::sortGroups(bool reverse)
 {
-    emit groupChanged(m_model->groupFromIndex(index));
+    Group* group = currentGroup();
+    if (group) {
+        m_model->sortChildren(group, reverse);
+    }
 }
 
 void GroupView::setModel(QAbstractItemModel* model)
@@ -123,12 +142,7 @@ void GroupView::setModel(QAbstractItemModel* model)
 
 void GroupView::emitGroupChanged()
 {
-    emit groupChanged(currentGroup());
-}
-
-void GroupView::emitGroupPressed(const QModelIndex& index)
-{
-    emit groupPressed(m_model->groupFromIndex(index));
+    emit groupSelectionChanged(currentGroup());
 }
 
 void GroupView::syncExpandedState(const QModelIndex& parent, int start, int end)

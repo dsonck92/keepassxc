@@ -35,18 +35,19 @@ private slots:
 protected:
     void initTestCaseImpl() override;
 
-    Database* readXml(QBuffer* buf, bool strictMode, bool& hasError, QString& errorString) override;
-    Database* readXml(const QString& path, bool strictMode, bool& hasError, QString& errorString) override;
+    QSharedPointer<Database> readXml(QBuffer* buf, bool strictMode, bool& hasError, QString& errorString) override;
+    QSharedPointer<Database>
+    readXml(const QString& path, bool strictMode, bool& hasError, QString& errorString) override;
     void writeXml(QBuffer* buf, Database* db, bool& hasError, QString& errorString) override;
 
     void readKdbx(const QString& path,
-                  CompositeKey const& key,
-                  QScopedPointer<Database>& db,
+                  QSharedPointer<const CompositeKey> key,
+                  QSharedPointer<Database> db,
                   bool& hasError,
                   QString& errorString) override;
     void readKdbx(QIODevice* device,
-                  CompositeKey const& key,
-                  QScopedPointer<Database>& db,
+                  QSharedPointer<const CompositeKey> key,
+                  QSharedPointer<Database> db,
                   bool& hasError,
                   QString& errorString) override;
     void writeKdbx(QIODevice* device, Database* db, bool& hasError, QString& errorString) override;

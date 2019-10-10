@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2017 KeePassXC Team <team@keepassxc.org>
+ *  Copyright (C) 2019 KeePassXC Team <team@keepassxc.org>
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  *
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ */
 
 #ifndef KEEPASSX_YK_CHALLENGERESPONSEKEY_H
 #define KEEPASSX_YK_CHALLENGERESPONSEKEY_H
@@ -29,11 +29,14 @@ class YkChallengeResponseKey : public QObject, public ChallengeResponseKey
     Q_OBJECT
 
 public:
-    YkChallengeResponseKey(int slot = -1, bool blocking = false);
+    static QUuid UUID;
 
-    QByteArray rawKey() const;
-    bool challenge(const QByteArray& challenge);
-    bool challenge(const QByteArray& challenge, unsigned retries);
+    explicit YkChallengeResponseKey(int slot = -1, bool blocking = false);
+    ~YkChallengeResponseKey() override;
+
+    QByteArray rawKey() const override;
+    bool challenge(const QByteArray& challenge) override;
+    bool challenge(const QByteArray& challenge, unsigned int retries);
     QString getName() const;
     bool isBlocking() const;
 
@@ -50,7 +53,8 @@ signals:
     void userConfirmed();
 
 private:
-    QByteArray m_key;
+    char* m_key = nullptr;
+    std::size_t m_keySize = 0;
     int m_slot;
     bool m_blocking;
 };

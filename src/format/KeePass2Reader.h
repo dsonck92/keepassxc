@@ -35,14 +35,11 @@ class KeePass2Reader
     Q_DECLARE_TR_FUNCTIONS(KdbxReader)
 
 public:
-    Database* readDatabase(const QString& filename, const CompositeKey& key);
-    Database* readDatabase(QIODevice* device, const CompositeKey& key, bool keepDatabase = false);
+    bool readDatabase(const QString& filename, QSharedPointer<const CompositeKey> key, Database* db);
+    bool readDatabase(QIODevice* device, QSharedPointer<const CompositeKey> key, Database* db);
 
     bool hasError() const;
     QString errorString() const;
-
-    bool saveXml() const;
-    void setSaveXml(bool save);
 
     QSharedPointer<KdbxReader> reader() const;
     quint32 version() const;
@@ -50,7 +47,6 @@ public:
 private:
     void raiseError(const QString& errorMessage);
 
-    bool m_saveXml = false;
     bool m_error = false;
     QString m_errorStr = "";
 

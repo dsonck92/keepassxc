@@ -68,6 +68,11 @@ AutoTypeExecutor* AutoTypePlatformTest::createExecutor()
     return new AutoTypeExecutorTest(this);
 }
 
+void AutoTypePlatformTest::triggerGlobalAutoType()
+{
+    emit globalShortcutTriggered();
+}
+
 void AutoTypePlatformTest::setActiveWindowTitle(const QString& title)
 {
     m_activeWindowTitle = title;
@@ -110,8 +115,8 @@ bool AutoTypePlatformTest::raiseWindow(WId window)
     return false;
 }
 
-#if defined(Q_OS_MAC)
-bool AutoTypePlatformTest::raiseLastActiveWindow()
+#if defined(Q_OS_MACOS)
+bool AutoTypePlatformTest::hideOwnWindow()
 {
     return false;
 }

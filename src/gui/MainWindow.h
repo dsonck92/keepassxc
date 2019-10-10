@@ -34,12 +34,13 @@ namespace Ui
 }
 
 class InactivityTimer;
+class SearchWidget;
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
-#if defined(Q_OS_UNIX) && !defined(Q_OS_MAC) && !defined(QT_NO_DBUS)
+#if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS) && !defined(QT_NO_DBUS)
     Q_CLASSINFO("D-Bus Interface", "org.keepassxc.KeePassXC.MainWindow")
 #endif
 
@@ -56,7 +57,7 @@ public:
     };
 
 public slots:
-    void openDatabase(const QString& fileName, const QString& pw = QString(), const QString& keyFile = QString());
+    void openDatabase(const QString& filePath, const QString& password = {}, const QString& keyfile = {});
     void appExit();
     void displayGlobalMessage(const QString& text,
                               MessageWidget::MessageType type,
@@ -69,26 +70,40 @@ public slots:
     void hideGlobalMessage();
     void showYubiKeyPopup();
     void hideYubiKeyPopup();
+    void hideWindow();
+    void toggleWindow();
     void bringToFront();
     void closeAllDatabases();
     void lockAllDatabases();
+    void displayDesktopNotification(const QString& msg, QString title = "", int msTimeoutHint = 10000);
 
 protected:
     void closeEvent(QCloseEvent* event) override;
     void changeEvent(QEvent* event) override;
 
 private slots:
-    void setMenuActionState(DatabaseWidget::Mode mode = DatabaseWidget::None);
+    void setMenuActionState(DatabaseWidget::Mode mode = DatabaseWidget::Mode::None);
     void updateWindowTitle();
     void showAboutDialog();
+    void showUpdateCheckStartup();
+    void showUpdateCheckDialog();
+    void focusWindowChanged(QWindow* focusWindow);
+    void hasUpdateAvailable(bool hasUpdate, const QString& version, bool isManuallyRequested);
+    void openDonateUrl();
+    void openBugReportUrl();
+    void openGettingStartedGuide();
+    void openUserGuide();
+    void openOnlineHelp();
+    void openKeyboardShortcuts();
     void switchToDatabases();
-    void switchToSettings();
+    void switchToSettings(bool enabled);
     void switchToPasswordGen(bool enabled);
     void switchToNewDatabase();
     void switchToOpenDatabase();
-    void switchToDatabaseFile(QString file);
+    void switchToDatabaseFile(const QString& file);
     void switchToKeePass1Database();
-    void switchToImportCsv();
+    void switchToOpVaultDatabase();
+    void switchToCsvImport();
     void closePasswordGen();
     void databaseStatusChanged(DatabaseWidget* dbWidget);
     void databaseTabChanged(int tabIndex);
@@ -98,16 +113,19 @@ private slots:
     void updateCopyAttributesMenu();
     void showEntryContextMenu(const QPoint& globalPos);
     void showGroupContextMenu(const QPoint& globalPos);
-    void rememberOpenDatabases(const QString& filePath);
     void applySettingsChanges();
     void trayIconTriggered(QSystemTrayIcon::ActivationReason reason);
-    void hideWindow();
-    void toggleWindow();
+    void processTrayIconTrigger();
     void lockDatabasesAfterInactivity();
-    void repairDatabase();
-    void hideTabMessage();
+    void forgetTouchIDAfterInactivity();
     void handleScreenLock();
     void showErrorMessage(const QString& message);
+    void selectNextDatabaseTab();
+    void selectPreviousDatabaseTab();
+    void togglePasswordsHidden();
+    void toggleUsernamesHidden();
+    void obtainContextFocusLock();
+    void releaseContextFocusLock();
 
 private:
     static void setShortcut(QAction* action, QKeySequence::StandardKey standard, int fallback = 0);
@@ -118,6 +136,7 @@ private:
     bool saveLastDatabases();
     void updateTrayIcon();
     bool isTrayIconEnabled() const;
+    void customOpenUrl(QString url);
 
     static QStringList kdbxFilesFromUrls(const QList<QUrl>& urls);
     void dragEnterEvent(QDragEnterEvent* event) override;
@@ -129,20 +148,29 @@ private:
     QAction* m_searchWidgetAction;
     QActionGroup* m_lastDatabasesActions;
     QActionGroup* m_copyAdditionalAttributeActions;
-    QStringList m_openDatabases;
     InactivityTimer* m_inactivityTimer;
+    InactivityTimer* m_touchIDinactivityTimer;
     int m_countDefaultAttributes;
     QSystemTrayIcon* m_trayIcon;
     ScreenLockListener* m_screenLockListener;
+    QPointer<SearchWidget> m_searchWidget;
 
     Q_DISABLE_COPY(MainWindow)
 
     bool m_appExitCalled;
     bool m_appExiting;
+    bool m_contextMenuFocusLock;
+    uint m_lastFocusOutTime;
+    QTimer m_trayIconTriggerTimer;
+    QSystemTrayIcon::ActivationReason m_trayIconTriggerReason;
 };
 
-#define KEEPASSXC_MAIN_WINDOW                                                                                          \
-    (qobject_cast<Application*>(qApp) ? qobject_cast<MainWindow*>(qobject_cast<Application*>(qApp)->mainWindow())      \
-                                      : nullptr)
+/**
+ * Return instance of MainWindow created on app load
+ * non-gui instances will return nullptr
+ *
+ * @return MainWindow instance or nullptr
+ */
+MainWindow* getMainWindow();
 
 #endif // KEEPASSX_MAINWINDOW_H

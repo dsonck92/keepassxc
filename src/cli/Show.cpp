@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2017 KeePassXC Team <team@keepassxc.org>
+ *  Copyright (C) 2019 KeePassXC Team <team@keepassxc.org>
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -15,90 +15,73 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "Show.h"
+
 #include <cstdlib>
 #include <stdio.h>
 
-#include "Show.h"
-
-#include <QCommandLineParser>
-#include <QTextStream>
-
+#include "Utils.h"
+#include "cli/TextStream.h"
 #include "core/Database.h"
 #include "core/Entry.h"
+#include "core/Global.h"
 #include "core/Group.h"
+
+const QCommandLineOption Show::TotpOption = QCommandLineOption(QStringList() << "t"
+                                                                             << "totp",
+                                                               QObject::tr("Show the entry's current TOTP."));
+
+const QCommandLineOption Show::AttributesOption = QCommandLineOption(
+    QStringList() << "a"
+                  << "attributes",
+    QObject::tr(
+        "Names of the attributes to show. "
+        "This option can be specified more than once, with each attribute shown one-per-line in the given order. "
+        "If no attributes are specified, a summary of the default attributes is given."),
+    QObject::tr("attribute"));
 
 Show::Show()
 {
     name = QString("show");
     description = QObject::tr("Show an entry's information.");
+    options.append(Show::TotpOption);
+    options.append(Show::AttributesOption);
+    positionalArguments.append({QString("entry"), QObject::tr("Name of the entry to show."), QString("")});
 }
 
-Show::~Show()
+int Show::executeWithDatabase(QSharedPointer<Database> database, QSharedPointer<QCommandLineParser> parser)
 {
-}
+    TextStream outputTextStream(Utils::STDOUT, QIODevice::WriteOnly);
+    TextStream errorTextStream(Utils::STDERR, QIODevice::WriteOnly);
 
-int Show::execute(const QStringList& arguments)
-{
-    QTextStream out(stdout);
+    const QStringList args = parser->positionalArguments();
+    const QString& entryPath = args.at(1);
+    bool showTotp = parser->isSet(Show::TotpOption);
+    QStringList attributes = parser->values(Show::AttributesOption);
 
-    QCommandLineParser parser;
-    parser.setApplicationDescription(this->description);
-    parser.addPositionalArgument("database", QObject::tr("Path of the database."));
-    QCommandLineOption keyFile(QStringList() << "k"
-                                             << "key-file",
-                               QObject::tr("Key file of the database."),
-                               QObject::tr("path"));
-    parser.addOption(keyFile);
-    QCommandLineOption attributes(
-        QStringList() << "a"
-                      << "attributes",
-        QObject::tr(
-            "Names of the attributes to show. "
-            "This option can be specified more than once, with each attribute shown one-per-line in the given order. "
-            "If no attributes are specified, a summary of the default attributes is given."),
-        QObject::tr("attribute"));
-    parser.addOption(attributes);
-    parser.addPositionalArgument("entry", QObject::tr("Name of the entry to show."));
-    parser.process(arguments);
-
-    const QStringList args = parser.positionalArguments();
-    if (args.size() != 2) {
-        out << parser.helpText().replace("keepassxc-cli", "keepassxc-cli show");
-        return EXIT_FAILURE;
-    }
-
-    Database* db = Database::unlockFromStdin(args.at(0), parser.value(keyFile));
-    if (db == nullptr) {
-        return EXIT_FAILURE;
-    }
-
-    return this->showEntry(db, parser.values(attributes), args.at(1));
-}
-
-int Show::showEntry(Database* database, QStringList attributes, QString entryPath)
-{
-
-    QTextStream inputTextStream(stdin, QIODevice::ReadOnly);
-    QTextStream outputTextStream(stdout, QIODevice::WriteOnly);
-
-    Entry* entry = database->rootGroup()->findEntry(entryPath);
+    Entry* entry = database->rootGroup()->findEntryByPath(entryPath);
     if (!entry) {
-        qCritical("Could not find entry with path %s.", qPrintable(entryPath));
+        errorTextStream << QObject::tr("Could not find entry with path %1.").arg(entryPath) << endl;
+        return EXIT_FAILURE;
+    }
+
+    if (showTotp && !entry->hasTotp()) {
+        errorTextStream << QObject::tr("Entry with path %1 has no TOTP set up.").arg(entryPath) << endl;
         return EXIT_FAILURE;
     }
 
     // If no attributes specified, output the default attribute set.
-    bool showAttributeNames = attributes.isEmpty();
-    if (attributes.isEmpty()) {
+    bool showAttributeNames = attributes.isEmpty() && !showTotp;
+    if (attributes.isEmpty() && !showTotp) {
         attributes = EntryAttributes::DefaultAttributes;
     }
 
     // Iterate over the attributes and output them line-by-line.
     bool sawUnknownAttribute = false;
-    for (QString attribute : attributes) {
+    for (const QString& attribute : asConst(attributes)) {
         if (!entry->attributes()->contains(attribute)) {
             sawUnknownAttribute = true;
-            qCritical("ERROR: unknown attribute '%s'.", qPrintable(attribute));
+            errorTextStream << QObject::tr("ERROR: unknown attribute %1.").arg(attribute) << endl;
             continue;
         }
         if (showAttributeNames) {
@@ -106,5 +89,13 @@ int Show::showEntry(Database* database, QStringList attributes, QString entryPat
         }
         outputTextStream << entry->resolveMultiplePlaceholders(entry->attributes()->value(attribute)) << endl;
     }
+
+    if (showTotp) {
+        if (showAttributeNames) {
+            outputTextStream << "TOTP: ";
+        }
+        outputTextStream << entry->totp() << endl;
+    }
+
     return sawUnknownAttribute ? EXIT_FAILURE : EXIT_SUCCESS;
 }

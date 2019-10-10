@@ -17,14 +17,18 @@
  */
 
 #include "AgentSettingsWidget.h"
-#include "core/Config.h"
 #include "ui_AgentSettingsWidget.h"
+
+#include "core/Config.h"
 
 AgentSettingsWidget::AgentSettingsWidget(QWidget* parent)
     : QWidget(parent)
     , m_ui(new Ui::AgentSettingsWidget())
 {
     m_ui->setupUi(this);
+#ifndef Q_OS_WIN
+    m_ui->useOpenSSHCheckBox->setVisible(false);
+#endif
 }
 
 AgentSettingsWidget::~AgentSettingsWidget()
@@ -34,9 +38,15 @@ AgentSettingsWidget::~AgentSettingsWidget()
 void AgentSettingsWidget::loadSettings()
 {
     m_ui->enableSSHAgentCheckBox->setChecked(config()->get("SSHAgent", false).toBool());
+#ifdef Q_OS_WIN
+    m_ui->useOpenSSHCheckBox->setChecked(config()->get("SSHAgentOpenSSH", false).toBool());
+#endif
 }
 
 void AgentSettingsWidget::saveSettings()
 {
     config()->set("SSHAgent", m_ui->enableSSHAgentCheckBox->isChecked());
+#ifdef Q_OS_WIN
+    config()->set("SSHAgentOpenSSH", m_ui->useOpenSSHCheckBox->isChecked());
+#endif
 }

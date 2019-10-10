@@ -16,6 +16,7 @@
  */
 
 #include "KeePass1OpenWidget.h"
+#include "ui_DatabaseOpenWidget.h"
 
 #include <QFile>
 #include <QFileInfo>
@@ -24,12 +25,11 @@
 #include "core/Metadata.h"
 #include "format/KeePass1Reader.h"
 #include "gui/MessageBox.h"
-#include "ui_DatabaseOpenWidget.h"
 
 KeePass1OpenWidget::KeePass1OpenWidget(QWidget* parent)
     : DatabaseOpenWidget(parent)
 {
-    m_ui->labelHeadline->setText(tr("Import KeePass1 database"));
+    m_ui->labelHeadline->setText(tr("Import KeePass1 Database"));
 }
 
 void KeePass1OpenWidget::openDatabase()
@@ -39,11 +39,11 @@ void KeePass1OpenWidget::openDatabase()
     QString password;
     QString keyFileName;
 
-    if (m_ui->checkPassword->isChecked()) {
+    if (!m_ui->editPassword->text().isEmpty() || m_retryUnlockWithEmptyPassword) {
         password = m_ui->editPassword->text();
     }
 
-    if (m_ui->checkKeyFile->isChecked()) {
+    if (!m_ui->comboKeyFile->currentText().isEmpty() && m_ui->comboKeyFile->currentData() != -1) {
         keyFileName = m_ui->comboKeyFile->currentText();
     }
 
@@ -53,20 +53,17 @@ void KeePass1OpenWidget::openDatabase()
                                          MessageWidget::Error);
         return;
     }
-    if (m_db) {
-        delete m_db;
-    }
+
     QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
     m_db = reader.readDatabase(&file, password, keyFileName);
     QApplication::restoreOverrideCursor();
 
     if (m_db) {
         m_db->metadata()->setName(QFileInfo(m_filename).completeBaseName());
-        emit editFinished(true);
+        emit dialogFinished(true);
+        clearForms();
     } else {
         m_ui->messageWidget->showMessage(tr("Unable to open the database.").append("\n").append(reader.errorString()),
                                          MessageWidget::Error);
-
-        m_ui->editPassword->clear();
     }
 }

@@ -19,8 +19,8 @@
 #ifndef AGENTSETTINGSPAGE_H
 #define AGENTSETTINGSPAGE_H
 
+#include "gui/ApplicationSettingsWidget.h"
 #include "gui/DatabaseTabWidget.h"
-#include "gui/SettingsWidget.h"
 
 class AgentSettingsPage : public ISettingsPage
 {

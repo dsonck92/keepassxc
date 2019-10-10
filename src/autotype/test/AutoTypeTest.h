@@ -43,11 +43,12 @@ public:
     bool raiseWindow(WId window) override;
     AutoTypeExecutor* createExecutor() override;
 
-#if defined(Q_OS_MAC)
-    bool raiseLastActiveWindow() override;
+#if defined(Q_OS_MACOS)
+    bool hideOwnWindow() override;
     bool raiseOwnWindow() override;
 #endif
 
+    void triggerGlobalAutoType() override;
     void setActiveWindowTitle(const QString& title) override;
 
     QString actionChars() override;

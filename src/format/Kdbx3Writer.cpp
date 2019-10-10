@@ -63,14 +63,13 @@ bool Kdbx3Writer::writeDatabase(QIODevice* device, Database* db)
     QBuffer header;
     header.open(QIODevice::WriteOnly);
 
-    writeMagicNumbers(&header, KeePass2::SIGNATURE_1, KeePass2::SIGNATURE_2, KeePass2::FILE_VERSION_3_1);
+    writeMagicNumbers(&header, KeePass2::SIGNATURE_1, KeePass2::SIGNATURE_2, formatVersion());
 
-    CHECK_RETURN_FALSE(
-        writeHeaderField<quint16>(&header, KeePass2::HeaderFieldID::CipherID, db->cipher().toByteArray()));
+    CHECK_RETURN_FALSE(writeHeaderField<quint16>(&header, KeePass2::HeaderFieldID::CipherID, db->cipher().toRfc4122()));
     CHECK_RETURN_FALSE(
         writeHeaderField<quint16>(&header,
                                   KeePass2::HeaderFieldID::CompressionFlags,
-                                  Endian::sizedIntToBytes<qint32>(db->compressionAlgo(), KeePass2::BYTEORDER)));
+                                  Endian::sizedIntToBytes<qint32>(db->compressionAlgorithm(), KeePass2::BYTEORDER)));
     auto kdf = db->kdf();
     CHECK_RETURN_FALSE(writeHeaderField<quint16>(&header, KeePass2::HeaderFieldID::MasterSeed, masterSeed));
     CHECK_RETURN_FALSE(writeHeaderField<quint16>(&header, KeePass2::HeaderFieldID::TransformSeed, kdf->seed()));
@@ -114,7 +113,7 @@ bool Kdbx3Writer::writeDatabase(QIODevice* device, Database* db)
     QIODevice* outputDevice = nullptr;
     QScopedPointer<QtIOCompressor> ioCompressor;
 
-    if (db->compressionAlgo() == Database::CompressionNone) {
+    if (db->compressionAlgorithm() == Database::CompressionNone) {
         outputDevice = &hashedStream;
     } else {
         ioCompressor.reset(new QtIOCompressor(&hashedStream));
@@ -134,7 +133,7 @@ bool Kdbx3Writer::writeDatabase(QIODevice* device, Database* db)
         return false;
     }
 
-    KdbxXmlWriter xmlWriter(KeePass2::FILE_VERSION_3_1);
+    KdbxXmlWriter xmlWriter(formatVersion());
     xmlWriter.writeDatabase(outputDevice, db, &randomStream, headerHash);
 
     // Explicitly close/reset streams so they are flushed and we can detect
@@ -157,4 +156,9 @@ bool Kdbx3Writer::writeDatabase(QIODevice* device, Database* db)
     }
 
     return true;
+}
+
+quint32 Kdbx3Writer::formatVersion()
+{
+    return KeePass2::FILE_VERSION_3_1;
 }

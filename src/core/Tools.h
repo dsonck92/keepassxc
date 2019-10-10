@@ -21,19 +21,19 @@
 
 #include "core/Global.h"
 
-#include <QDateTime>
 #include <QObject>
 #include <QString>
+#include <QUuid>
 
 #include <algorithm>
 
 class QIODevice;
+class QRegularExpression;
 
 namespace Tools
 {
-
+    QString debugInfo();
     QString humanReadableFileSize(qint64 bytes, quint32 precision = 2);
-    bool hasChild(const QObject* parent, const QObject* child);
     bool readFromDevice(QIODevice* device, QByteArray& data, int size = 16384);
     bool readAllFromDevice(QIODevice* device, QByteArray& data);
     QString imageReaderFilter();
@@ -41,9 +41,12 @@ namespace Tools
     bool isBase64(const QByteArray& ba);
     void sleep(int ms);
     void wait(int ms);
-    void disableCoreDumps();
-    void setupSearchPaths();
-    bool createWindowsDACL();
+    QString uuidToHex(const QUuid& uuid);
+    QUuid hexToUuid(const QString& uuid);
+    QRegularExpression convertToRegex(const QString& string,
+                                      bool useWildcards = false,
+                                      bool exactMatch = false,
+                                      bool caseSensitive = false);
 
     template <typename RandomAccessIterator, typename T>
     RandomAccessIterator binaryFind(RandomAccessIterator begin, RandomAccessIterator end, const T& value)
@@ -57,6 +60,47 @@ namespace Tools
         }
     }
 
+    template <typename Key, typename Value, void deleter(Value)> struct Map
+    {
+        QMap<Key, Value> values;
+        Value& operator[](const Key index)
+        {
+            return values[index];
+        }
+
+        ~Map()
+        {
+            for (Value m : values) {
+                deleter(m);
+            }
+        }
+    };
+
+    struct Buffer
+    {
+        unsigned char* raw;
+        size_t size;
+
+        Buffer();
+        ~Buffer();
+
+        void clear();
+        QByteArray content() const;
+    };
+
+    inline int qtRuntimeVersion()
+    {
+        // Cache the result since the Qt version can't change during
+        // the execution, computing it once will be enough
+        const static int version = []() {
+            const auto sq = QString::fromLatin1(qVersion());
+            return (sq.section(QChar::fromLatin1('.'), 0, 0).toInt() << 16)
+                   + (sq.section(QChar::fromLatin1('.'), 1, 1).toInt() << 8)
+                   + (sq.section(QChar::fromLatin1('.'), 2, 2).toInt());
+        }();
+
+        return version;
+    }
 } // namespace Tools
 
 #endif // KEEPASSX_TOOLS_H

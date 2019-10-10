@@ -1,23 +1,25 @@
 /*
-*  Copyright (C) 2014 Kyle Manna <kyle@kylemanna.com>
-*  Copyright (C) 2017 KeePassXC Team <team@keepassxc.org>
-*
-*  This program is free software: you can redistribute it and/or modify
-*  it under the terms of the GNU General Public License as published by
-*  the Free Software Foundation, either version 2 or (at your option)
-*  version 3 of the License.
-*
-*  This program is distributed in the hope that it will be useful,
-*  but WITHOUT ANY WARRANTY; without even the implied warranty of
-*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*  GNU General Public License for more details.
-*
-*  You should have received a copy of the GNU General Public License
-*  along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ *  Copyright (C) 2019 KeePassXC Team <team@keepassxc.org>
+ *  Copyright (C) 2014 Kyle Manna <kyle@kylemanna.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 2 or (at your option)
+ *  version 3 of the License.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include "keys/YkChallengeResponseKey.h"
 #include "keys/drivers/YubiKey.h"
 
+#include "core/AsyncTask.h"
 #include "core/Tools.h"
 #include "crypto/CryptoHash.h"
 #include "crypto/Random.h"
@@ -30,33 +32,47 @@
 #include <QXmlStreamReader>
 #include <QtConcurrent>
 
+#include <cstring>
+#include <gcrypt.h>
+#include <sodium.h>
+
+QUuid YkChallengeResponseKey::UUID("e092495c-e77d-498b-84a1-05ae0d955508");
+
 YkChallengeResponseKey::YkChallengeResponseKey(int slot, bool blocking)
-    : m_slot(slot)
+    : ChallengeResponseKey(UUID)
+    , m_slot(slot)
     , m_blocking(blocking)
 {
-    if (KEEPASSXC_MAIN_WINDOW) {
-        connect(this, SIGNAL(userInteractionRequired()), KEEPASSXC_MAIN_WINDOW, SLOT(showYubiKeyPopup()));
-        connect(this, SIGNAL(userConfirmed()), KEEPASSXC_MAIN_WINDOW, SLOT(hideYubiKeyPopup()));
+    if (getMainWindow()) {
+        connect(this, SIGNAL(userInteractionRequired()), getMainWindow(), SLOT(showYubiKeyPopup()));
+        connect(this, SIGNAL(userConfirmed()), getMainWindow(), SLOT(hideYubiKeyPopup()));
+    }
+}
+
+YkChallengeResponseKey::~YkChallengeResponseKey()
+{
+    if (m_key) {
+        gcry_free(m_key);
+        m_keySize = 0;
+        m_key = nullptr;
     }
 }
 
 QByteArray YkChallengeResponseKey::rawKey() const
 {
-    return m_key;
+    return QByteArray::fromRawData(m_key, static_cast<int>(m_keySize));
 }
 
 /**
  * Assumes yubikey()->init() was called
  */
-bool YkChallengeResponseKey::challenge(const QByteArray& challenge)
+bool YkChallengeResponseKey::challenge(const QByteArray& c)
 {
-    return this->challenge(challenge, 2);
+    return challenge(c, 2);
 }
 
-bool YkChallengeResponseKey::challenge(const QByteArray& challenge, unsigned retries)
+bool YkChallengeResponseKey::challenge(const QByteArray& challenge, unsigned int retries)
 {
-    Q_ASSERT(retries > 0);
-
     do {
         --retries;
 
@@ -64,28 +80,24 @@ bool YkChallengeResponseKey::challenge(const QByteArray& challenge, unsigned ret
             emit userInteractionRequired();
         }
 
-        QFuture<YubiKey::ChallengeResult> future = QtConcurrent::run(
-            [this, challenge]() { return YubiKey::instance()->challenge(m_slot, true, challenge, m_key); });
-
-        QEventLoop loop;
-        QFutureWatcher<YubiKey::ChallengeResult> watcher;
-        connect(&watcher, SIGNAL(finished()), &loop, SLOT(quit()));
-        watcher.setFuture(future);
-        loop.exec();
+        QByteArray key;
+        auto result = AsyncTask::runAndWaitForFuture(
+            [this, challenge, &key]() { return YubiKey::instance()->challenge(m_slot, true, challenge, key); });
 
         if (m_blocking) {
             emit userConfirmed();
         }
 
-        if (future.result() != YubiKey::ERROR) {
+        if (result == YubiKey::SUCCESS) {
+            if (m_key) {
+                gcry_free(m_key);
+            }
+            m_keySize = static_cast<std::size_t>(key.size());
+            m_key = static_cast<char*>(gcry_malloc_secure(m_keySize));
+            std::memcpy(m_key, key.data(), m_keySize);
+            sodium_memzero(key.data(), static_cast<std::size_t>(key.capacity()));
             return true;
         }
-
-        // if challenge failed, retry to detect YubiKeys in the event the YubiKey was un-plugged and re-plugged
-        if (retries > 0 && !YubiKey::instance()->init()) {
-            continue;
-        }
-
     } while (retries > 0);
 
     return false;
@@ -94,12 +106,14 @@ bool YkChallengeResponseKey::challenge(const QByteArray& challenge, unsigned ret
 QString YkChallengeResponseKey::getName() const
 {
     unsigned int serial;
-    QString fmt(QObject::tr("YubiKey[%1] Challenge Response - Slot %2 - %3"));
+    QString fmt(QObject::tr("%1[%2] Challenge Response - Slot %3 - %4"));
 
     YubiKey::instance()->getSerial(serial);
 
-    return fmt.arg(
-        QString::number(serial), QString::number(m_slot), (m_blocking) ? QObject::tr("Press") : QObject::tr("Passive"));
+    return fmt.arg(YubiKey::instance()->getVendorName(),
+                   QString::number(serial),
+                   QString::number(m_slot),
+                   (m_blocking) ? QObject::tr("Press") : QObject::tr("Passive"));
 }
 
 bool YkChallengeResponseKey::isBlocking() const

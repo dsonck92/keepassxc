@@ -217,15 +217,14 @@ void TestEntryModel::testCustomIconModel()
 
     QCOMPARE(model->rowCount(), 0);
 
-    QHash<Uuid, QPixmap> icons;
-    QList<Uuid> iconsOrder;
+    QHash<QUuid, QPixmap> icons;
+    QList<QUuid> iconsOrder;
 
-    Uuid iconUuid(QByteArray(16, '2'));
+    QUuid iconUuid = QUuid::fromRfc4122(QByteArray(16, '2'));
     icons.insert(iconUuid, QPixmap());
     iconsOrder << iconUuid;
 
-    Uuid iconUuid2(QByteArray(16, '1'));
-    QImage icon2;
+    QUuid iconUuid2 = QUuid::fromRfc4122(QByteArray(16, '1'));
     icons.insert(iconUuid2, QPixmap());
     iconsOrder << iconUuid2;
 
@@ -292,11 +291,11 @@ void TestEntryModel::testProxyModel()
      * @author Fonic <https://github.com/fonic>
      * Update comparison value of modelProxy->columnCount() to account for
      * additional columns 'Password', 'Notes', 'Expires', 'Created', 'Modified',
-     * 'Accessed', 'Paperclip' and 'Attachments'
+     * 'Accessed', 'Paperclip', 'Attachments', and TOTP
      */
     QSignalSpy spyColumnRemove(modelProxy, SIGNAL(columnsAboutToBeRemoved(QModelIndex, int, int)));
     modelProxy->hideColumn(0, true);
-    QCOMPARE(modelProxy->columnCount(), 11);
+    QCOMPARE(modelProxy->columnCount(), 12);
     QVERIFY(spyColumnRemove.size() >= 1);
 
     int oldSpyColumnRemoveSize = spyColumnRemove.size();
@@ -308,17 +307,17 @@ void TestEntryModel::testProxyModel()
 
     QList<Entry*> entryList;
     entryList << entry;
-    modelSource->setEntryList(entryList);
+    modelSource->setEntries(entryList);
 
     /**
      * @author Fonic <https://github.com/fonic>
      * Update comparison value of modelProxy->columnCount() to account for
      * additional columns 'Password', 'Notes', 'Expires', 'Created', 'Modified',
-     * 'Accessed', 'Paperclip' and 'Attachments'
+     * 'Accessed', 'Paperclip', 'Attachments', and TOTP
      */
     QSignalSpy spyColumnInsert(modelProxy, SIGNAL(columnsAboutToBeInserted(QModelIndex, int, int)));
     modelProxy->hideColumn(0, false);
-    QCOMPARE(modelProxy->columnCount(), 12);
+    QCOMPARE(modelProxy->columnCount(), 13);
     QVERIFY(spyColumnInsert.size() >= 1);
 
     int oldSpyColumnInsertSize = spyColumnInsert.size();
@@ -347,7 +346,7 @@ void TestEntryModel::testDatabaseDelete()
     Entry* entry2 = new Entry();
     entry2->setGroup(db2->rootGroup());
 
-    model->setEntryList(QList<Entry*>() << entry1 << entry2);
+    model->setEntries(QList<Entry*>() << entry1 << entry2);
 
     QCOMPARE(model->rowCount(), 2);
 

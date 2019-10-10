@@ -34,7 +34,7 @@ KdbxXmlWriter::KdbxXmlWriter(quint32 version)
 }
 
 void KdbxXmlWriter::writeDatabase(QIODevice* device,
-                                  Database* db,
+                                  const Database* db,
                                   KeePass2RandomStream* randomStream,
                                   const QByteArray& headerHash)
 {
@@ -154,15 +154,15 @@ void KdbxXmlWriter::writeCustomIcons()
 {
     m_xml.writeStartElement("CustomIcons");
 
-    const QList<Uuid> customIconsOrder = m_meta->customIconsOrder();
-    for (const Uuid& uuid : customIconsOrder) {
+    const QList<QUuid> customIconsOrder = m_meta->customIconsOrder();
+    for (const QUuid& uuid : customIconsOrder) {
         writeIcon(uuid, m_meta->customIcon(uuid));
     }
 
     m_xml.writeEndElement();
 }
 
-void KdbxXmlWriter::writeIcon(const Uuid& uuid, const QImage& icon)
+void KdbxXmlWriter::writeIcon(const QUuid& uuid, const QImage& icon)
 {
     m_xml.writeStartElement("Icon");
 
@@ -190,7 +190,7 @@ void KdbxXmlWriter::writeBinaries()
         m_xml.writeAttribute("ID", QString::number(i.value()));
 
         QByteArray data;
-        if (m_db->compressionAlgo() == Database::CompressionGZip) {
+        if (m_db->compressionAlgorithm() == Database::CompressionGZip) {
             m_xml.writeAttribute("Compressed", "True");
 
             QBuffer buffer;
@@ -356,12 +356,14 @@ void KdbxXmlWriter::writeEntry(const Entry* entry)
     for (const QString& key : attributesKeyList) {
         m_xml.writeStartElement("String");
 
+        // clang-format off
         bool protect =
             (((key == "Title") && m_meta->protectTitle()) || ((key == "UserName") && m_meta->protectUsername())
-             || ((key == "Password") && m_meta->protectPassword())
-             || ((key == "URL") && m_meta->protectUrl())
-             || ((key == "Notes") && m_meta->protectNotes())
-             || entry->attributes()->isProtected(key));
+            || ((key == "Password") && m_meta->protectPassword())
+            || ((key == "URL") && m_meta->protectUrl())
+            || ((key == "Notes") && m_meta->protectNotes())
+            || entry->attributes()->isProtected(key));
+        // clang-format on
 
         writeString("Key", key);
 
@@ -369,7 +371,7 @@ void KdbxXmlWriter::writeEntry(const Entry* entry)
         QString value;
 
         if (protect) {
-            if (m_randomStream) {
+            if (!m_innerStreamProtectionDisabled && m_randomStream) {
                 m_xml.writeAttribute("Protected", "True");
                 bool ok;
                 QByteArray rawData = m_randomStream->process(entry->attributes()->value(key).toUtf8(), &ok);
@@ -502,9 +504,9 @@ void KdbxXmlWriter::writeDateTime(const QString& qualifiedName, const QDateTime&
     writeString(qualifiedName, dateTimeStr);
 }
 
-void KdbxXmlWriter::writeUuid(const QString& qualifiedName, const Uuid& uuid)
+void KdbxXmlWriter::writeUuid(const QString& qualifiedName, const QUuid& uuid)
 {
-    writeString(qualifiedName, uuid.toBase64());
+    writeString(qualifiedName, uuid.toRfc4122().toBase64());
 }
 
 void KdbxXmlWriter::writeUuid(const QString& qualifiedName, const Group* group)
@@ -512,7 +514,7 @@ void KdbxXmlWriter::writeUuid(const QString& qualifiedName, const Group* group)
     if (group) {
         writeUuid(qualifiedName, group->uuid());
     } else {
-        writeUuid(qualifiedName, Uuid());
+        writeUuid(qualifiedName, QUuid());
     }
 }
 
@@ -521,7 +523,7 @@ void KdbxXmlWriter::writeUuid(const QString& qualifiedName, const Entry* entry)
     if (entry) {
         writeUuid(qualifiedName, entry->uuid());
     } else {
-        writeUuid(qualifiedName, Uuid());
+        writeUuid(qualifiedName, QUuid());
     }
 }
 
@@ -595,4 +597,25 @@ void KdbxXmlWriter::raiseError(const QString& errorMessage)
 {
     m_error = true;
     m_errorStr = errorMessage;
+}
+
+/**
+ * Disable inner stream protection and write protected fields
+ * in plaintext instead. This is useful for plaintext XML exports
+ * where the inner stream key is not available.
+ *
+ * @param disable true to disable protection
+ */
+void KdbxXmlWriter::disableInnerStreamProtection(bool disable)
+{
+    m_innerStreamProtectionDisabled = disable;
+}
+
+/**
+ * @return true if inner stream protection is disabled and protected
+ *         fields will be saved in plaintext
+ */
+bool KdbxXmlWriter::innerStreamProtectionDisabled() const
+{
+    return m_innerStreamProtectionDisabled;
 }

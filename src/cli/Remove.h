@@ -18,17 +18,14 @@
 #ifndef KEEPASSXC_REMOVE_H
 #define KEEPASSXC_REMOVE_H
 
-#include "Command.h"
+#include "DatabaseCommand.h"
 
-#include "core/Database.h"
-
-class Remove : public Command
+class Remove : public DatabaseCommand
 {
 public:
     Remove();
-    ~Remove();
-    int execute(const QStringList& arguments);
-    int removeEntry(Database* database, QString databasePath, QString entryPath);
+
+    int executeWithDatabase(QSharedPointer<Database> db, QSharedPointer<QCommandLineParser> parser);
 };
 
 #endif // KEEPASSXC_REMOVE_H

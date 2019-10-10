@@ -25,27 +25,36 @@ class FileDialog
 public:
     QString getOpenFileName(QWidget* parent = nullptr,
                             const QString& caption = QString(),
-                            QString dir = QString(),
+                            const QString& dir = QString(),
                             const QString& filter = QString(),
                             QString* selectedFilter = nullptr,
-                            QFileDialog::Options options = 0);
+                            const QFileDialog::Options options = {});
+
     QStringList getOpenFileNames(QWidget* parent = nullptr,
                                  const QString& caption = QString(),
-                                 QString dir = QString(),
+                                 const QString& dir = QString(),
                                  const QString& filter = QString(),
                                  QString* selectedFilter = nullptr,
-                                 QFileDialog::Options options = 0);
+                                 const QFileDialog::Options options = {});
+
+    QString getFileName(QWidget* parent = nullptr,
+                        const QString& caption = QString(),
+                        const QString& dir = QString(),
+                        const QString& filter = QString(),
+                        QString* selectedFilter = nullptr,
+                        const QFileDialog::Options options = {});
+
     QString getSaveFileName(QWidget* parent = nullptr,
                             const QString& caption = QString(),
-                            QString dir = QString(),
+                            const QString& dir = QString(),
                             const QString& filter = QString(),
                             QString* selectedFilter = nullptr,
-                            QFileDialog::Options options = 0,
-                            const QString& defaultExtension = QString());
+                            const QFileDialog::Options options = {});
+
     QString getExistingDirectory(QWidget* parent = nullptr,
                                  const QString& caption = QString(),
-                                 QString dir = QString(),
-                                 QFileDialog::Options options = QFileDialog::ShowDirsOnly);
+                                 const QString& dir = QString(),
+                                 const QFileDialog::Options options = QFileDialog::ShowDirsOnly);
 
     void setNextForgetDialog();
     /**
@@ -65,7 +74,7 @@ private:
     QString m_nextDirName;
     bool m_forgetLastDir = false;
 
-    void saveLastDir(QString);
+    void saveLastDir(const QString&);
 
     static FileDialog* m_instance;
 

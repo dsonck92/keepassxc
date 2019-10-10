@@ -18,6 +18,7 @@
 
 #include "WelcomeWidget.h"
 #include "ui_WelcomeWidget.h"
+#include <QKeyEvent>
 
 #include "config-keepassx.h"
 #include "core/Config.h"
@@ -29,7 +30,7 @@ WelcomeWidget::WelcomeWidget(QWidget* parent)
 {
     m_ui->setupUi(this);
 
-    m_ui->welcomeLabel->setText(tr("Welcome to KeePassXC %1").arg(KEEPASSX_VERSION));
+    m_ui->welcomeLabel->setText(tr("Welcome to KeePassXC %1").arg(KEEPASSXC_VERSION));
     QFont welcomeLabelFont = m_ui->welcomeLabel->font();
     welcomeLabelFont.setBold(true);
     welcomeLabelFont.setPointSize(welcomeLabelFont.pointSize() + 4);
@@ -47,6 +48,7 @@ WelcomeWidget::WelcomeWidget(QWidget* parent)
     connect(m_ui->buttonNewDatabase, SIGNAL(clicked()), SIGNAL(newDatabase()));
     connect(m_ui->buttonOpenDatabase, SIGNAL(clicked()), SIGNAL(openDatabase()));
     connect(m_ui->buttonImportKeePass1, SIGNAL(clicked()), SIGNAL(importKeePass1Database()));
+    connect(m_ui->buttonImportOpVault, SIGNAL(clicked()), SIGNAL(importOpVaultDatabase()));
     connect(m_ui->buttonImportCSV, SIGNAL(clicked()), SIGNAL(importCsv()));
     connect(m_ui->recentListWidget,
             SIGNAL(itemActivated(QListWidgetItem*)),
@@ -75,4 +77,13 @@ void WelcomeWidget::refreshLastDatabases()
         itm->setText(database);
         m_ui->recentListWidget->addItem(itm);
     }
+}
+
+void WelcomeWidget::keyPressEvent(QKeyEvent* event)
+{
+    if (m_ui->recentListWidget->hasFocus() && (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)) {
+        openDatabaseFromFile(m_ui->recentListWidget->currentItem());
+    }
+
+    QWidget::keyPressEvent(event);
 }

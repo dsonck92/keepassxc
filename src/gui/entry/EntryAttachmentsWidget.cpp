@@ -7,9 +7,11 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QMimeData>
+#include <QProcessEnvironment>
 #include <QTemporaryFile>
 
 #include "EntryAttachmentsModel.h"
+#include "config-keepassx.h"
 #include "core/Config.h"
 #include "core/EntryAttachments.h"
 #include "core/Tools.h"
@@ -43,9 +45,12 @@ EntryAttachmentsWidget::EntryAttachmentsWidget(QWidget* parent)
 
     connect(this, SIGNAL(readOnlyChanged(bool)), SLOT(updateButtonsEnabled()));
     connect(m_attachmentsModel, SIGNAL(modelReset()), SLOT(updateButtonsEnabled()));
+
+    // clang-format off
     connect(m_ui->attachmentsView->selectionModel(),
-            SIGNAL(selectionChanged(QItemSelection, QItemSelection)),
+            SIGNAL(selectionChanged(QItemSelection,QItemSelection)),
             SLOT(updateButtonsEnabled()));
+    // clang-format on
 
     connect(m_ui->attachmentsView, SIGNAL(doubleClicked(QModelIndex)), SLOT(openAttachment(QModelIndex)));
     connect(m_ui->saveAttachmentButton, SIGNAL(clicked()), SLOT(saveSelectedAttachments()));
@@ -162,10 +167,13 @@ void EntryAttachmentsWidget::removeSelectedAttachments()
         return;
     }
 
-    const QString question = tr("Are you sure you want to remove %n attachment(s)?", "", indexes.count());
-    QMessageBox::StandardButton answer =
-        MessageBox::question(this, tr("Confirm remove"), question, QMessageBox::Yes | QMessageBox::No);
-    if (answer == QMessageBox::Yes) {
+    auto result = MessageBox::question(this,
+                                       tr("Confirm remove"),
+                                       tr("Are you sure you want to remove %n attachment(s)?", "", indexes.count()),
+                                       MessageBox::Remove | MessageBox::Cancel,
+                                       MessageBox::Cancel);
+
+    if (result == MessageBox::Remove) {
         QStringList keys;
         for (const QModelIndex& index : indexes) {
             keys.append(m_attachmentsModel->keyByIndex(index));
@@ -208,15 +216,21 @@ void EntryAttachmentsWidget::saveSelectedAttachments()
         const QString attachmentPath = saveDir.absoluteFilePath(filename);
 
         if (QFileInfo::exists(attachmentPath)) {
-            const QString question(
+
+            MessageBox::Buttons buttons = MessageBox::Overwrite | MessageBox::Cancel;
+            if (indexes.length() > 1) {
+                buttons |= MessageBox::Skip;
+            }
+
+            const QString questionText(
                 tr("Are you sure you want to overwrite the existing file \"%1\" with the attachment?"));
-            auto answer = MessageBox::question(this,
-                                               tr("Confirm overwrite"),
-                                               question.arg(filename),
-                                               QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
-            if (answer == QMessageBox::No) {
+
+            auto result = MessageBox::question(
+                this, tr("Confirm overwrite"), questionText.arg(filename), buttons, MessageBox::Cancel);
+
+            if (result == MessageBox::Skip) {
                 continue;
-            } else if (answer == QMessageBox::Cancel) {
+            } else if (result == MessageBox::Cancel) {
                 return;
             }
         }
@@ -300,7 +314,7 @@ bool EntryAttachmentsWidget::insertAttachments(const QStringList& filenames, QSt
     }
 
     if (!errors.isEmpty()) {
-        errorMessage = tr("Unable to open files:\n%1").arg(errors.join('\n'));
+        errorMessage = tr("Unable to open file(s):\n%1", "", errors.size()).arg(errors.join('\n'));
     }
 
     return errors.isEmpty();
@@ -312,7 +326,12 @@ bool EntryAttachmentsWidget::openAttachment(const QModelIndex& index, QString& e
     const QByteArray attachmentData = m_entryAttachments->value(filename);
 
     // tmp file will be removed once the database (or the application) has been closed
+#ifdef KEEPASSXC_DIST_SNAP
+    const QString tmpFileTemplate =
+        QString("%1/XXXXXX.%2").arg(QProcessEnvironment::systemEnvironment().value("SNAP_USER_DATA"), filename);
+#else
     const QString tmpFileTemplate = QDir::temp().absoluteFilePath(QString("XXXXXX.").append(filename));
+#endif
 
     QScopedPointer<QTemporaryFile> tmpFile(new QTemporaryFile(tmpFileTemplate, this));
 

@@ -50,7 +50,6 @@ bool Kdbx4Writer::writeDatabase(QIODevice* device, Database* db)
     QByteArray masterSeed = randomGen()->randomArray(32);
     QByteArray encryptionIV = randomGen()->randomArray(ivSize);
     QByteArray protectedStreamKey = randomGen()->randomArray(64);
-    QByteArray startBytes;
     QByteArray endOfHeader = "\r\n\r\n";
 
     if (!db->setKey(db->key(), false, true)) {
@@ -71,14 +70,14 @@ bool Kdbx4Writer::writeDatabase(QIODevice* device, Database* db)
         QBuffer header;
         header.open(QIODevice::WriteOnly);
 
-        writeMagicNumbers(&header, KeePass2::SIGNATURE_1, KeePass2::SIGNATURE_2, KeePass2::FILE_VERSION_4);
+        writeMagicNumbers(&header, KeePass2::SIGNATURE_1, KeePass2::SIGNATURE_2, formatVersion());
 
         CHECK_RETURN_FALSE(
-            writeHeaderField<quint32>(&header, KeePass2::HeaderFieldID::CipherID, db->cipher().toByteArray()));
+            writeHeaderField<quint32>(&header, KeePass2::HeaderFieldID::CipherID, db->cipher().toRfc4122()));
         CHECK_RETURN_FALSE(writeHeaderField<quint32>(
             &header,
             KeePass2::HeaderFieldID::CompressionFlags,
-            Endian::sizedIntToBytes(static_cast<int>(db->compressionAlgo()), KeePass2::BYTEORDER)));
+            Endian::sizedIntToBytes(static_cast<int>(db->compressionAlgorithm()), KeePass2::BYTEORDER)));
         CHECK_RETURN_FALSE(writeHeaderField<quint32>(&header, KeePass2::HeaderFieldID::MasterSeed, masterSeed));
         CHECK_RETURN_FALSE(writeHeaderField<quint32>(&header, KeePass2::HeaderFieldID::EncryptionIV, encryptionIV));
 
@@ -140,7 +139,7 @@ bool Kdbx4Writer::writeDatabase(QIODevice* device, Database* db)
     QIODevice* outputDevice = nullptr;
     QScopedPointer<QtIOCompressor> ioCompressor;
 
-    if (db->compressionAlgo() == Database::CompressionNone) {
+    if (db->compressionAlgorithm() == Database::CompressionNone) {
         outputDevice = cipherStream.data();
     } else {
         ioCompressor.reset(new QtIOCompressor(cipherStream.data()));
@@ -172,7 +171,7 @@ bool Kdbx4Writer::writeDatabase(QIODevice* device, Database* db)
         return false;
     }
 
-    KdbxXmlWriter xmlWriter(KeePass2::FILE_VERSION_4);
+    KdbxXmlWriter xmlWriter(formatVersion());
     xmlWriter.writeDatabase(outputDevice, db, &randomStream, headerHash);
 
     // Explicitly close/reset streams so they are flushed and we can detect
@@ -311,4 +310,9 @@ bool Kdbx4Writer::serializeVariantMap(const QVariantMap& map, QByteArray& output
     endBytes[0] = static_cast<char>(KeePass2::VariantMapFieldType::End);
     CHECK_RETURN_FALSE(buf.write(endBytes) == 1);
     return true;
+}
+
+quint32 Kdbx4Writer::formatVersion()
+{
+    return KeePass2::FILE_VERSION_4;
 }

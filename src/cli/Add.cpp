@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2017 KeePassXC Team <team@keepassxc.org>
+ *  Copyright (C) 2019 KeePassXC Team <team@keepassxc.org>
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,131 +20,112 @@
 
 #include "Add.h"
 
-#include <QCommandLineParser>
-#include <QTextStream>
-
+#include "cli/Generate.h"
+#include "cli/TextStream.h"
 #include "cli/Utils.h"
 #include "core/Database.h"
 #include "core/Entry.h"
 #include "core/Group.h"
 #include "core/PasswordGenerator.h"
 
+const QCommandLineOption Add::UsernameOption = QCommandLineOption(QStringList() << "u"
+                                                                                << "username",
+                                                                  QObject::tr("Username for the entry."),
+                                                                  QObject::tr("username"));
+
+const QCommandLineOption Add::UrlOption =
+    QCommandLineOption(QStringList() << "url", QObject::tr("URL for the entry."), QObject::tr("URL"));
+
+const QCommandLineOption Add::PasswordPromptOption =
+    QCommandLineOption(QStringList() << "p"
+                                     << "password-prompt",
+                       QObject::tr("Prompt for the entry's password."));
+
+const QCommandLineOption Add::GenerateOption = QCommandLineOption(QStringList() << "g"
+                                                                                << "generate",
+                                                                  QObject::tr("Generate a password for the entry."));
+
 Add::Add()
 {
     name = QString("add");
     description = QObject::tr("Add a new entry to a database.");
+    options.append(Add::UsernameOption);
+    options.append(Add::UrlOption);
+    options.append(Add::PasswordPromptOption);
+    positionalArguments.append({QString("entry"), QObject::tr("Path of the entry to add."), QString("")});
+
+    // Password generation options.
+    options.append(Add::GenerateOption);
+    options.append(Generate::PasswordLengthOption);
+    options.append(Generate::LowerCaseOption);
+    options.append(Generate::UpperCaseOption);
+    options.append(Generate::NumbersOption);
+    options.append(Generate::SpecialCharsOption);
+    options.append(Generate::ExtendedAsciiOption);
+    options.append(Generate::ExcludeCharsOption);
+    options.append(Generate::ExcludeSimilarCharsOption);
+    options.append(Generate::IncludeEveryGroupOption);
 }
 
-Add::~Add()
+int Add::executeWithDatabase(QSharedPointer<Database> database, QSharedPointer<QCommandLineParser> parser)
 {
-}
+    TextStream inputTextStream(Utils::STDIN, QIODevice::ReadOnly);
+    TextStream outputTextStream(Utils::STDOUT, QIODevice::WriteOnly);
+    TextStream errorTextStream(Utils::STDERR, QIODevice::WriteOnly);
 
-int Add::execute(const QStringList& arguments)
-{
+    const QStringList args = parser->positionalArguments();
+    const QString& databasePath = args.at(0);
+    const QString& entryPath = args.at(1);
 
-    QTextStream inputTextStream(stdin, QIODevice::ReadOnly);
-    QTextStream outputTextStream(stdout, QIODevice::WriteOnly);
-
-    QCommandLineParser parser;
-    parser.setApplicationDescription(this->description);
-    parser.addPositionalArgument("database", QObject::tr("Path of the database."));
-
-    QCommandLineOption keyFile(QStringList() << "k"
-                                             << "key-file",
-                               QObject::tr("Key file of the database."),
-                               QObject::tr("path"));
-    parser.addOption(keyFile);
-
-    QCommandLineOption username(QStringList() << "u"
-                                              << "username",
-                                QObject::tr("Username for the entry."),
-                                QObject::tr("username"));
-    parser.addOption(username);
-
-    QCommandLineOption url(QStringList() << "url", QObject::tr("URL for the entry."), QObject::tr("URL"));
-    parser.addOption(url);
-
-    QCommandLineOption prompt(QStringList() << "p"
-                                            << "password-prompt",
-                              QObject::tr("Prompt for the entry's password."));
-    parser.addOption(prompt);
-
-    QCommandLineOption generate(QStringList() << "g"
-                                              << "generate",
-                                QObject::tr("Generate a password for the entry."));
-    parser.addOption(generate);
-
-    QCommandLineOption length(QStringList() << "l"
-                                            << "password-length",
-                              QObject::tr("Length for the generated password."),
-                              QObject::tr("length"));
-    parser.addOption(length);
-
-    parser.addPositionalArgument("entry", QObject::tr("Path of the entry to add."));
-    parser.process(arguments);
-
-    const QStringList args = parser.positionalArguments();
-    if (args.size() != 2) {
-        outputTextStream << parser.helpText().replace("keepassxc-cli", "keepassxc-cli add");
+    // Cannot use those 2 options at the same time!
+    if (parser->isSet(Add::GenerateOption) && parser->isSet(Add::PasswordPromptOption)) {
+        errorTextStream << QObject::tr("Cannot generate a password and prompt at the same time!") << endl;
         return EXIT_FAILURE;
     }
 
-    QString databasePath = args.at(0);
-    QString entryPath = args.at(1);
-
-    Database* db = Database::unlockFromStdin(databasePath, parser.value(keyFile));
-    if (db == nullptr) {
-        return EXIT_FAILURE;
-    }
-
-    // Validating the password length here, before we actually create
+    // Validating the password generator here, before we actually create
     // the entry.
-    QString passwordLength = parser.value(length);
-    if (!passwordLength.isEmpty() && !passwordLength.toInt()) {
-        qCritical("Invalid value for password length %s.", qPrintable(passwordLength));
-        return EXIT_FAILURE;
-    }
-
-    Entry* entry = db->rootGroup()->addEntryWithPath(entryPath);
-    if (!entry) {
-        qCritical("Could not create entry with path %s.", qPrintable(entryPath));
-        return EXIT_FAILURE;
-    }
-
-    if (!parser.value("username").isEmpty()) {
-        entry->setUsername(parser.value("username"));
-    }
-
-    if (!parser.value("url").isEmpty()) {
-        entry->setUrl(parser.value("url"));
-    }
-
-    if (parser.isSet(prompt)) {
-        outputTextStream << "Enter password for new entry: ";
-        outputTextStream.flush();
-        QString password = Utils::getPassword();
-        entry->setPassword(password);
-    } else if (parser.isSet(generate)) {
-        PasswordGenerator passwordGenerator;
-
-        if (passwordLength.isEmpty()) {
-            passwordGenerator.setLength(PasswordGenerator::DefaultLength);
-        } else {
-            passwordGenerator.setLength(passwordLength.toInt());
+    QSharedPointer<PasswordGenerator> passwordGenerator;
+    if (parser->isSet(Add::GenerateOption)) {
+        passwordGenerator = Generate::createGenerator(parser);
+        if (passwordGenerator.isNull()) {
+            return EXIT_FAILURE;
         }
-
-        passwordGenerator.setCharClasses(PasswordGenerator::DefaultCharset);
-        passwordGenerator.setFlags(PasswordGenerator::DefaultFlags);
-        QString password = passwordGenerator.generatePassword();
-        entry->setPassword(password);
     }
 
-    QString errorMessage = db->saveToFile(databasePath);
-    if (!errorMessage.isEmpty()) {
-        qCritical("Writing the database failed %s.", qPrintable(errorMessage));
+    Entry* entry = database->rootGroup()->addEntryWithPath(entryPath);
+    if (!entry) {
+        errorTextStream << QObject::tr("Could not create entry with path %1.").arg(entryPath) << endl;
         return EXIT_FAILURE;
     }
 
-    outputTextStream << "Successfully added entry " << entry->title() << "." << endl;
+    if (!parser->value(Add::UsernameOption).isEmpty()) {
+        entry->setUsername(parser->value(Add::UsernameOption));
+    }
+
+    if (!parser->value(Add::UrlOption).isEmpty()) {
+        entry->setUrl(parser->value(Add::UrlOption));
+    }
+
+    if (parser->isSet(Add::PasswordPromptOption)) {
+        if (!parser->isSet(Command::QuietOption)) {
+            outputTextStream << QObject::tr("Enter password for new entry: ") << flush;
+        }
+        QString password = Utils::getPassword(parser->isSet(Command::QuietOption) ? Utils::DEVNULL : Utils::STDOUT);
+        entry->setPassword(password);
+    } else if (parser->isSet(Add::GenerateOption)) {
+        QString password = passwordGenerator->generatePassword();
+        entry->setPassword(password);
+    }
+
+    QString errorMessage;
+    if (!database->save(databasePath, &errorMessage, true, false)) {
+        errorTextStream << QObject::tr("Writing the database failed %1.").arg(errorMessage) << endl;
+        return EXIT_FAILURE;
+    }
+
+    if (!parser->isSet(Command::QuietOption)) {
+        outputTextStream << QObject::tr("Successfully added entry %1.").arg(entry->title()) << endl;
+    }
     return EXIT_SUCCESS;
 }

@@ -1,20 +1,20 @@
 /*
-*  Copyright (C) 2014 Kyle Manna <kyle@kylemanna.com>
-*  Copyright (C) 2017 KeePassXC Team <team@keepassxc.org>
-*
-*  This program is free software: you can redistribute it and/or modify
-*  it under the terms of the GNU General Public License as published by
-*  the Free Software Foundation, either version 2 or (at your option)
-*  version 3 of the License.
-*
-*  This program is distributed in the hope that it will be useful,
-*  but WITHOUT ANY WARRANTY; without even the implied warranty of
-*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*  GNU General Public License for more details.
-*
-*  You should have received a copy of the GNU General Public License
-*  along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ *  Copyright (C) 2014 Kyle Manna <kyle@kylemanna.com>
+ *  Copyright (C) 2017 KeePassXC Team <team@keepassxc.org>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 2 or (at your option)
+ *  version 3 of the License.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #ifndef KEEPASSX_YUBIKEY_H
 #define KEEPASSX_YUBIKEY_H
@@ -68,7 +68,7 @@ public:
      * @param mayBlock operation is allowed to block
      * @param challenge challenge input to YubiKey
      * @param response response output from YubiKey
-     * @return true on success
+     * @return challenge result
      */
     ChallengeResult challenge(int slot, bool mayBlock, const QByteArray& challenge, QByteArray& response);
 
@@ -80,10 +80,23 @@ public:
     bool getSerial(unsigned int& serial);
 
     /**
+     * @brief YubiKey::getVendorName - vendor name of token
+     * @return vendor name
+     */
+    QString getVendorName();
+
+    /**
      * @brief YubiKey::detect - probe for attached YubiKeys
      */
     void detect();
 
+    /**
+     * @param slot the yubikey slot.
+     * @param errorMessage populated if an error occured.
+     *
+     * @return whether the key is blocking or not.
+     */
+    bool checkSlotIsBlocking(int slot, QString& errorMessage);
 signals:
     /** Emitted in response to detect() when a device is found
      *
@@ -99,19 +112,9 @@ signals:
     void detectComplete();
 
     /**
-     * Emitted when the YubiKey was challenged and has returned a response.
-     */
-    void challenged();
-
-    /**
      * Emitted when no Yubikey could be found.
      */
     void notFound();
-
-    /**
-     * Emitted when detection is already running.
-     */
-    void alreadyRunning();
 
 private:
     explicit YubiKey();
@@ -120,6 +123,7 @@ private:
     // Create void ptr here to avoid ifdef header include mess
     void* m_yk_void;
     void* m_ykds_void;
+    bool m_onlyKey;
 
     QMutex m_mutex;
 

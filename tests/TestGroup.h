@@ -28,6 +28,8 @@ class TestGroup : public QObject
 
 private slots:
     void initTestCase();
+    void init();
+    void cleanup();
     void testParenting();
     void testSignals();
     void testEntries();
@@ -40,6 +42,13 @@ private slots:
     void testPrint();
     void testLocate();
     void testAddEntryWithPath();
+    void testIsRecycled();
+    void testCopyDataFrom();
+    void testEquals();
+    void testChildrenSort();
+    void testHierarchy();
+    void testApplyGroupIconRecursively();
+    void testUsernamesRecursive();
 };
 
 #endif // KEEPASSX_TESTGROUP_H

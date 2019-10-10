@@ -19,7 +19,9 @@
 #ifndef KEEPASSX_PASSWORDEDIT_H
 #define KEEPASSX_PASSWORDEDIT_H
 
+#include <QAction>
 #include <QLineEdit>
+#include <QPointer>
 
 class PasswordEdit : public QLineEdit
 {
@@ -31,6 +33,7 @@ public:
 
     explicit PasswordEdit(QWidget* parent = nullptr);
     void enableVerifyMode(PasswordEdit* baseEdit);
+    bool isPasswordVisible() const;
 
 public slots:
     void setShowPassword(bool show);
@@ -40,12 +43,14 @@ signals:
 
 private slots:
     void updateStylesheet();
-    void autocompletePassword(QString password);
+    void autocompletePassword(const QString& password);
 
 private:
     bool passwordsEqual() const;
 
-    PasswordEdit* m_basePasswordEdit;
+    QPointer<QAction> m_errorAction;
+    QPointer<QAction> m_correctAction;
+    QPointer<PasswordEdit> m_basePasswordEdit;
 };
 
 #endif // KEEPASSX_PASSWORDEDIT_H

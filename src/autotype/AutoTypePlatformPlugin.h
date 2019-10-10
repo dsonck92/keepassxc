@@ -42,8 +42,8 @@ public:
 
     virtual AutoTypeExecutor* createExecutor() = 0;
 
-#if defined(Q_OS_MAC)
-    virtual bool raiseLastActiveWindow() = 0;
+#if defined(Q_OS_MACOS)
+    virtual bool hideOwnWindow() = 0;
     virtual bool raiseOwnWindow() = 0;
 #endif
 

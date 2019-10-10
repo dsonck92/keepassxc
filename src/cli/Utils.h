@@ -18,14 +18,42 @@
 #ifndef KEEPASSXC_UTILS_H
 #define KEEPASSXC_UTILS_H
 
+#include "cli/TextStream.h"
+#include "core/Database.h"
+#include "keys/CompositeKey.h"
+#include "keys/FileKey.h"
+#include "keys/PasswordKey.h"
 #include <QtCore/qglobal.h>
 
-class Utils
+#ifdef WITH_XC_YUBIKEY
+#include "keys/YkChallengeResponseKey.h"
+#include "keys/YkChallengeResponseKeyCLI.h"
+#include "keys/drivers/YubiKey.h"
+#endif
+
+namespace Utils
 {
-public:
-    static void setStdinEcho(bool enable);
-    static QString getPassword();
-    static int clipText(const QString& text);
-};
+    extern FILE* STDOUT;
+    extern FILE* STDERR;
+    extern FILE* STDIN;
+    extern FILE* DEVNULL;
+
+    void setStdinEcho(bool enable);
+    QString getPassword(FILE* outputDescriptor = STDOUT);
+    int clipText(const QString& text);
+    QSharedPointer<Database> unlockDatabase(const QString& databaseFilename,
+                                            const bool isPasswordProtected = true,
+                                            const QString& keyFilename = {},
+                                            const QString& yubiKeySlot = {},
+                                            FILE* outputDescriptor = STDOUT,
+                                            FILE* errorDescriptor = STDERR);
+
+    QStringList splitCommandString(const QString& command);
+
+    namespace Test
+    {
+        void setNextPassword(const QString& password);
+    }
+}; // namespace Utils
 
 #endif // KEEPASSXC_UTILS_H

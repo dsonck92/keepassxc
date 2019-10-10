@@ -1,3 +1,5 @@
+#include <utility>
+
 /*
  * Copyright (C) 2018 KeePassXC Team <team@keepassxc.org>
  *
@@ -18,6 +20,10 @@
 #include "KdbxReader.h"
 #include "core/Database.h"
 #include "core/Endian.h"
+
+#include <QBuffer>
+
+#define UUID_LENGTH 16
 
 /**
  * Read KDBX magic header numbers from a device.
@@ -52,15 +58,14 @@ bool KdbxReader::readMagicNumbers(QIODevice* device, quint32& sig1, quint32& sig
  *
  * @param device input device
  * @param key database encryption composite key
- * @param keepDatabase keep database in case of read failure
- * @return pointer to the read database, nullptr on failure
+ * @param db database to read into
+ * @return true on success
  */
-Database* KdbxReader::readDatabase(QIODevice* device, const CompositeKey& key, bool keepDatabase)
+bool KdbxReader::readDatabase(QIODevice* device, QSharedPointer<const CompositeKey> key, Database* db)
 {
     device->seek(0);
 
-    m_db.reset(new Database());
-    m_xmlData.clear();
+    m_db = db;
     m_masterSeed.clear();
     m_encryptionIV.clear();
     m_streamStartBytes.clear();
@@ -72,7 +77,7 @@ Database* KdbxReader::readDatabase(QIODevice* device, const CompositeKey& key, b
     // read KDBX magic numbers
     quint32 sig1, sig2;
     if (!readMagicNumbers(&headerStream, sig1, sig2, m_kdbxVersion)) {
-        return nullptr;
+        return false;
     }
     m_kdbxSignature = qMakePair(sig1, sig2);
 
@@ -80,17 +85,17 @@ Database* KdbxReader::readDatabase(QIODevice* device, const CompositeKey& key, b
     m_kdbxVersion &= KeePass2::FILE_VERSION_CRITICAL_MASK;
 
     // read header fields
-    while (readHeaderField(headerStream) && !hasError()) {
+    while (readHeaderField(headerStream, m_db) && !hasError()) {
     }
 
     headerStream.close();
 
     if (hasError()) {
-        return nullptr;
+        return false;
     }
 
     // read payload
-    return readDatabaseImpl(device, headerStream.storedData(), key, keepDatabase);
+    return readDatabaseImpl(device, headerStream.storedData(), std::move(key), db);
 }
 
 bool KdbxReader::hasError() const
@@ -103,26 +108,6 @@ QString KdbxReader::errorString() const
     return m_errorStr;
 }
 
-bool KdbxReader::saveXml() const
-{
-    return m_saveXml;
-}
-
-void KdbxReader::setSaveXml(bool save)
-{
-    m_saveXml = save;
-}
-
-QByteArray KdbxReader::xmlData() const
-{
-    return m_xmlData;
-}
-
-QByteArray KdbxReader::streamKey() const
-{
-    return m_protectedStreamKey;
-}
-
 KeePass2::ProtectedStreamAlgo KdbxReader::protectedStreamAlgo() const
 {
     return m_irsAlgo;
@@ -133,12 +118,16 @@ KeePass2::ProtectedStreamAlgo KdbxReader::protectedStreamAlgo() const
  */
 void KdbxReader::setCipher(const QByteArray& data)
 {
-    if (data.size() != Uuid::Length) {
-        raiseError(tr("Invalid cipher uuid length"));
+    if (data.size() != UUID_LENGTH) {
+        raiseError(tr("Invalid cipher uuid length: %1 (length=%2)").arg(QString(data)).arg(data.size()));
         return;
     }
 
-    Uuid uuid(data);
+    QUuid uuid = QUuid::fromRfc4122(data);
+    if (uuid.isNull()) {
+        raiseError(tr("Unable to parse UUID: %1").arg(QString(data)));
+        return;
+    }
 
     if (SymmetricCipher::cipherToAlgorithm(uuid) == SymmetricCipher::InvalidAlgorithm) {
         raiseError(tr("Unsupported cipher"));
@@ -162,7 +151,7 @@ void KdbxReader::setCompressionFlags(const QByteArray& data)
         raiseError(tr("Unsupported compression algorithm"));
         return;
     }
-    m_db->setCompressionAlgo(static_cast<Database::CompressionAlgorithm>(id));
+    m_db->setCompressionAlgorithm(static_cast<Database::CompressionAlgorithm>(id));
 }
 
 /**

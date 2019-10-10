@@ -23,9 +23,9 @@
 #include <QStandardItemModel>
 #include <QWidget>
 
-#include "core/CustomData.h"
-#include "core/TimeInfo.h"
-#include "core/Uuid.h"
+class CustomData;
+class TimeInfo;
+class QUuid;
 
 namespace Ui
 {
@@ -40,22 +40,20 @@ public:
     explicit EditWidgetProperties(QWidget* parent = nullptr);
     ~EditWidgetProperties();
 
-    void setFields(const TimeInfo& timeInfo, const Uuid& uuid);
-    void setCustomData(const CustomData* customData);
-
-    const CustomData* customData() const;
+    void setFields(const TimeInfo& timeInfo, const QUuid& uuid);
+    void setCustomData(CustomData* customData);
 
 private slots:
+    void update();
     void removeSelectedPluginData();
     void toggleRemoveButton(const QItemSelection& selected);
 
 private:
-    void updateModel();
-
     const QScopedPointer<Ui::EditWidgetProperties> m_ui;
 
     QPointer<CustomData> m_customData;
     QPointer<QStandardItemModel> m_customDataModel;
+
     Q_DISABLE_COPY(EditWidgetProperties)
 };
 

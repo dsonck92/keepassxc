@@ -18,9 +18,11 @@
 
 #include "EntryView.h"
 
+#include <QAccessible>
 #include <QHeaderView>
 #include <QKeyEvent>
 #include <QMenu>
+#include <QShortcut>
 
 #include "core/FilePath.h"
 #include "gui/SortFilterHideProxyModel.h"
@@ -49,22 +51,22 @@ EntryView::EntryView(QWidget* parent)
     // QAbstractItemView::startDrag() uses this property as the default drag action
     setDefaultDropAction(Qt::MoveAction);
 
+    // clang-format off
     connect(this, SIGNAL(doubleClicked(QModelIndex)), SLOT(emitEntryActivated(QModelIndex)));
-    connect(
-        selectionModel(), SIGNAL(selectionChanged(QItemSelection, QItemSelection)), SIGNAL(entrySelectionChanged()));
-    connect(m_model, SIGNAL(switchedToListMode()), SLOT(switchToListMode()));
-    connect(m_model, SIGNAL(switchedToSearchMode()), SLOT(switchToSearchMode()));
+    connect(selectionModel(), SIGNAL(selectionChanged(QItemSelection,QItemSelection)), SLOT(emitEntrySelectionChanged()));
     connect(m_model, SIGNAL(usernamesHiddenChanged()), SIGNAL(viewStateChanged()));
     connect(m_model, SIGNAL(passwordsHiddenChanged()), SIGNAL(viewStateChanged()));
-    connect(this, SIGNAL(clicked(QModelIndex)), SLOT(emitEntryPressed(QModelIndex)));
+    // clang-format on
+
+    new QShortcut(Qt::CTRL + Qt::Key_F10, this, SLOT(contextMenuShortcutPressed()), nullptr, Qt::WidgetShortcut);
 
     m_headerMenu = new QMenu(this);
     m_headerMenu->setTitle(tr("Customize View"));
     m_headerMenu->addSection(tr("Customize View"));
 
-    m_hideUsernamesAction = m_headerMenu->addAction(tr("Hide Usernames"), m_model, SLOT(toggleUsernamesHidden(bool)));
+    m_hideUsernamesAction = m_headerMenu->addAction(tr("Hide Usernames"), this, SLOT(setUsernamesHidden(bool)));
     m_hideUsernamesAction->setCheckable(true);
-    m_hidePasswordsAction = m_headerMenu->addAction(tr("Hide Passwords"), m_model, SLOT(togglePasswordsHidden(bool)));
+    m_hidePasswordsAction = m_headerMenu->addAction(tr("Hide Passwords"), this, SLOT(setPasswordsHidden(bool)));
     m_hidePasswordsAction->setCheckable(true);
     m_headerMenu->addSeparator();
 
@@ -97,10 +99,21 @@ EntryView::EntryView(QWidget* parent)
     header()->setContextMenuPolicy(Qt::CustomContextMenu);
 
     connect(header(), SIGNAL(customContextMenuRequested(QPoint)), SLOT(showHeaderMenu(QPoint)));
-    connect(header(), SIGNAL(sectionCountChanged(int, int)), SIGNAL(viewStateChanged()));
-    connect(header(), SIGNAL(sectionMoved(int, int, int)), SIGNAL(viewStateChanged()));
-    connect(header(), SIGNAL(sectionResized(int, int, int)), SIGNAL(viewStateChanged()));
-    connect(header(), SIGNAL(sortIndicatorChanged(int, Qt::SortOrder)), SIGNAL(viewStateChanged()));
+    // clang-format off
+    connect(header(), SIGNAL(sectionCountChanged(int,int)), SIGNAL(viewStateChanged()));
+    // clang-format on
+
+    // clang-format off
+    connect(header(), SIGNAL(sectionMoved(int,int,int)), SIGNAL(viewStateChanged()));
+    // clang-format on
+
+    // clang-format off
+    connect(header(), SIGNAL(sectionResized(int,int,int)), SIGNAL(viewStateChanged()));
+    // clang-format on
+
+    // clang-format off
+    connect(header(), SIGNAL(sortIndicatorChanged(int,Qt::SortOrder)), SIGNAL(viewStateChanged()));
+    // clang-format on
 
     resetFixedColumns();
 
@@ -119,43 +132,76 @@ EntryView::EntryView(QWidget* parent)
     m_model->setPaperClipPixmap(filePath()->icon("actions", "paperclip").pixmap(16));
 }
 
+void EntryView::contextMenuShortcutPressed()
+{
+    auto index = currentIndex();
+    if (hasFocus() && index.isValid()) {
+        emit customContextMenuRequested(visualRect(index).bottomLeft());
+    }
+}
+
 void EntryView::keyPressEvent(QKeyEvent* event)
 {
     if ((event->key() == Qt::Key_Enter || event->key() == Qt::Key_Return) && currentIndex().isValid()) {
         emitEntryActivated(currentIndex());
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
         // Pressing return does not emit the QTreeView::activated signal on mac os
         emit activated(currentIndex());
 #endif
     }
 
     int last = m_model->rowCount() - 1;
+    if (last > 0) {
+        QAccessibleEvent accessibleEvent(this, QAccessible::PageChanged);
+        if (event->key() == Qt::Key_Up && currentIndex().row() == 0) {
+            QModelIndex index = m_sortModel->mapToSource(m_sortModel->index(last, 0));
+            setCurrentEntry(m_model->entryFromIndex(index));
+            QAccessible::updateAccessibility(&accessibleEvent);
+            return;
+        }
 
-    if (event->key() == Qt::Key_Up && currentIndex().row() == 0) {
-        QModelIndex index = m_sortModel->mapToSource(m_sortModel->index(last, 0));
-        setCurrentEntry(m_model->entryFromIndex(index));
-        return;
-    }
-
-    if (event->key() == Qt::Key_Down && currentIndex().row() == last) {
-        QModelIndex index = m_sortModel->mapToSource(m_sortModel->index(0, 0));
-        setCurrentEntry(m_model->entryFromIndex(index));
-        return;
+        if (event->key() == Qt::Key_Down && currentIndex().row() == last) {
+            QModelIndex index = m_sortModel->mapToSource(m_sortModel->index(0, 0));
+            setCurrentEntry(m_model->entryFromIndex(index));
+            QAccessible::updateAccessibility(&accessibleEvent);
+            return;
+        }
     }
 
     QTreeView::keyPressEvent(event);
 }
 
-void EntryView::setGroup(Group* group)
+void EntryView::focusInEvent(QFocusEvent* event)
 {
-    m_model->setGroup(group);
-    setFirstEntryActive();
+    emit entrySelectionChanged(currentEntry());
+    QTreeView::focusInEvent(event);
 }
 
-void EntryView::setEntryList(const QList<Entry*>& entries)
+void EntryView::focusOutEvent(QFocusEvent* event)
 {
-    m_model->setEntryList(entries);
+    emit entrySelectionChanged(nullptr);
+    QTreeView::focusOutEvent(event);
+}
+
+void EntryView::displayGroup(Group* group)
+{
+    m_model->setGroup(group);
+    header()->hideSection(EntryModel::ParentGroup);
     setFirstEntryActive();
+    m_inSearchMode = false;
+}
+
+void EntryView::displaySearch(const QList<Entry*>& entries)
+{
+    m_model->setEntries(entries);
+    header()->showSection(EntryModel::ParentGroup);
+
+    // Reset sort column to 'Group', overrides DatabaseWidgetStateSync
+    m_sortModel->sort(EntryModel::ParentGroup, Qt::AscendingOrder);
+    sortByColumn(EntryModel::ParentGroup, Qt::AscendingOrder);
+
+    setFirstEntryActive();
+    m_inSearchMode = true;
 }
 
 void EntryView::setFirstEntryActive()
@@ -164,7 +210,7 @@ void EntryView::setFirstEntryActive()
         QModelIndex index = m_sortModel->mapToSource(m_sortModel->index(0, 0));
         setCurrentEntry(m_model->entryFromIndex(index));
     } else {
-        emit entrySelectionChanged();
+        emit entrySelectionChanged(currentEntry());
     }
 }
 
@@ -176,13 +222,12 @@ bool EntryView::inSearchMode()
 void EntryView::emitEntryActivated(const QModelIndex& index)
 {
     Entry* entry = entryFromIndex(index);
-
     emit entryActivated(entry, static_cast<EntryModel::ModelColumn>(m_sortModel->mapToSource(index).column()));
 }
 
-void EntryView::emitEntryPressed(const QModelIndex& index)
+void EntryView::emitEntrySelectionChanged()
 {
-    emit entryPressed(entryFromIndex(index));
+    emit entrySelectionChanged(currentEntry());
 }
 
 void EntryView::setModel(QAbstractItemModel* model)
@@ -222,39 +267,6 @@ Entry* EntryView::entryFromIndex(const QModelIndex& index)
 }
 
 /**
- * Switch to list mode, i.e. list entries of group
- */
-void EntryView::switchToListMode()
-{
-    if (!m_inSearchMode) {
-        return;
-    }
-
-    header()->hideSection(EntryModel::ParentGroup);
-    m_inSearchMode = false;
-}
-
-/**
- * Switch to search mode, i.e. list search results
- */
-void EntryView::switchToSearchMode()
-{
-    if (m_inSearchMode) {
-        return;
-    }
-
-    header()->showSection(EntryModel::ParentGroup);
-
-    // Always set sorting to column 'Group', as it does not feel right to
-    // have the last known sort configuration of search view restored by
-    // 'DatabaseWidgetStateSync', which is what happens without this
-    m_sortModel->sort(EntryModel::ParentGroup, Qt::AscendingOrder);
-    sortByColumn(EntryModel::ParentGroup, Qt::AscendingOrder);
-
-    m_inSearchMode = true;
-}
-
-/**
  * Get current state of 'Hide Usernames' setting (NOTE: just pass-through for
  * m_model)
  */
@@ -266,8 +278,13 @@ bool EntryView::isUsernamesHidden() const
 /**
  * Set state of 'Hide Usernames' setting (NOTE: just pass-through for m_model)
  */
-void EntryView::setUsernamesHidden(const bool hide)
+void EntryView::setUsernamesHidden(bool hide)
 {
+    bool block = m_hideUsernamesAction->signalsBlocked();
+    m_hideUsernamesAction->blockSignals(true);
+    m_hideUsernamesAction->setChecked(hide);
+    m_hideUsernamesAction->blockSignals(block);
+
     m_model->setUsernamesHidden(hide);
 }
 
@@ -283,8 +300,13 @@ bool EntryView::isPasswordsHidden() const
 /**
  * Set state of 'Hide Passwords' setting (NOTE: just pass-through for m_model)
  */
-void EntryView::setPasswordsHidden(const bool hide)
+void EntryView::setPasswordsHidden(bool hide)
 {
+    bool block = m_hidePasswordsAction->signalsBlocked();
+    m_hidePasswordsAction->blockSignals(true);
+    m_hidePasswordsAction->setChecked(hide);
+    m_hidePasswordsAction->blockSignals(block);
+
     m_model->setPasswordsHidden(hide);
 }
 

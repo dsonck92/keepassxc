@@ -16,6 +16,11 @@
  */
 
 #include "CustomData.h"
+#include "Clock.h"
+
+#include "core/Global.h"
+
+const QString CustomData::LastModified = "_LAST_MODIFIED";
 
 CustomData::CustomData(QObject* parent)
     : QObject(parent)
@@ -44,7 +49,7 @@ bool CustomData::contains(const QString& key) const
 
 bool CustomData::containsValue(const QString& value) const
 {
-    return m_data.values().contains(value);
+    return asConst(m_data).values().contains(value);
 }
 
 void CustomData::set(const QString& key, const QString& value)
@@ -58,7 +63,8 @@ void CustomData::set(const QString& key, const QString& value)
 
     if (addAttribute || changeValue) {
         m_data.insert(key, value);
-        emit modified();
+        updateLastModified();
+        emit customDataModified();
     }
 
     if (addAttribute) {
@@ -72,8 +78,9 @@ void CustomData::remove(const QString& key)
 
     m_data.remove(key);
 
+    updateLastModified();
     emit removed(key);
-    emit modified();
+    emit customDataModified();
 }
 
 void CustomData::rename(const QString& oldKey, const QString& newKey)
@@ -92,7 +99,8 @@ void CustomData::rename(const QString& oldKey, const QString& newKey)
     m_data.remove(oldKey);
     m_data.insert(newKey, data);
 
-    emit modified();
+    updateLastModified();
+    emit customDataModified();
     emit renamed(oldKey, newKey);
 }
 
@@ -106,9 +114,19 @@ void CustomData::copyDataFrom(const CustomData* other)
 
     m_data = other->m_data;
 
+    updateLastModified();
     emit reset();
-    emit modified();
+    emit customDataModified();
 }
+
+QDateTime CustomData::getLastModified() const
+{
+    if (m_data.contains(LastModified)) {
+        return Clock::parse(m_data.value(LastModified));
+    }
+    return {};
+}
+
 bool CustomData::operator==(const CustomData& other) const
 {
     return (m_data == other.m_data);
@@ -126,7 +144,7 @@ void CustomData::clear()
     m_data.clear();
 
     emit reset();
-    emit modified();
+    emit customDataModified();
 }
 
 bool CustomData::isEmpty() const
@@ -149,4 +167,14 @@ int CustomData::dataSize() const
         size += i.key().toUtf8().size() + i.value().toUtf8().size();
     }
     return size;
+}
+
+void CustomData::updateLastModified()
+{
+    if (m_data.size() == 1 && m_data.contains(LastModified)) {
+        m_data.remove(LastModified);
+        return;
+    }
+
+    m_data.insert(LastModified, Clock::currentDateTimeUtc().toString());
 }

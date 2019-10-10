@@ -25,9 +25,10 @@ The following libraries are required:
 * zlib
 * libmicrohttpd
 * libxi, libxtst, qtx11extras (optional for auto-type on X11)
-* libsodium (>= 1.0.12, optional for KeePassXC-Browser support)
+* libsodium (>= 1.0.12)
 * libargon2
-
+* qrencode
+* yubikey ykpers (optional to support YubiKey)
 
 Prepare the Building Environment
 ================================
@@ -38,6 +39,7 @@ Prepare the Building Environment
 
 Build Steps
 ===========
+We recommend using the release tool to perform builds, please read up-to-date instructions [on our wiki](https://github.com/keepassxreboot/keepassxc/wiki/Building-KeePassXC#building-using-the-release-tool).
 
 To compile from source, open a **Terminal (on Linux/MacOS)** or a **MSYS2-MinGW shell (on Windows)**<br/>
 **Note:** on Windows make sure you are using a **MINGW shell** by checking the label before the current path
@@ -75,6 +77,8 @@ cmake -DWITH_XC_ALL=ON ..
 make
 ```
 
+If you are on Windows, you may have to add ```-G "MSYS Makefiles"``` to the beginning of the cmake command. See the [Windows Build Instructions](https://github.com/keepassxreboot/keepassxc/wiki/Building-KeePassXC#windows) for more information.
+
 These steps place the compiled KeePassXC binary inside the `./build/src/` directory.
 (Note the cmake notes/options below.)
 
@@ -95,15 +99,27 @@ These steps place the compiled KeePassXC binary inside the `./build/src/` direct
 	  -DWITH_XC_AUTOTYPE=[ON|OFF] Enable/Disable Auto-Type (default: ON)
 	  -DWITH_XC_YUBIKEY=[ON|OFF] Enable/Disable YubiKey HMAC-SHA1 authentication support (default: OFF)
 	  -DWITH_XC_BROWSER=[ON|OFF] Enable/Disable KeePassXC-Browser extension support (default: OFF)
-	  -DWITH_XC_NETWORKING=[ON|OFF] Enable/Disable Networking support (favicon download) (default: OFF)
-	  
+	  -DWITH_XC_NETWORKING=[ON|OFF] Enable/Disable Networking support (e.g., favicon downloading) (default: OFF)
+	  -DWITH_XC_SSHAGENT=[ON|OFF] Enable/Disable SSHAgent support (default: OFF)
+	  -DWITH_XC_TOUCHID=[ON|OFF] (macOS Only) Enable/Disable Touch ID unlock (default:OFF)
+	  -DWITH_XC_FDOSECRETS=[ON|OFF] (Linux Only) Enable/Disable Freedesktop.org Secrets Service support (default:OFF)
+	  -DWITH_XC_KEESHARE=[ON|OFF] Enable/Disable KeeShare group synchronization extension (default: OFF)
+	  -DWITH_XC_KEESHARE_SECURE=[ON|OFF] Enable/Disable KeeShare signed containers, requires libquazip5 (default: OFF)
 	  -DWITH_XC_ALL=[ON|OFF] Enable/Disable compiling all plugins above (default: OFF)
 	  
+	  -DWITH_XC_UPDATECHECK=[ON|OFF] Enable/Disable automatic updating checking (requires WITH_XC_NETWORKING) (default: ON)
+
 	  -DWITH_TESTS=[ON|OFF] Enable/Disable building of unit tests (default: ON)
 	  -DWITH_GUI_TESTS=[ON|OFF] Enable/Disable building of GUI tests (default: OFF)
 	  -DWITH_DEV_BUILD=[ON|OFF] Enable/Disable deprecated method warnings (default: OFF)
 	  -DWITH_ASAN=[ON|OFF] Enable/Disable address sanitizer checks (Linux / macOS only) (default: OFF)
 	  -DWITH_COVERAGE=[ON|OFF] Enable/Disable coverage tests (GCC only) (default: OFF)
+	  -DWITH_APP_BUNDLE=[ON|OFF] Enable Application Bundle for macOS (default: ON)
+
+	  -DKEEPASSXC_BUILD_TYPE=[Snapshot|PreRelease|Release] Set the build type to show/hide stability warnings (default: "Snapshot")
+	  -DKEEPASSXC_DIST_TYPE=[Snap|AppImage|Other] Specify the distribution method (default: "Other")
+	  -DOVERRIDE_VERSION=[X.X.X] Specify a version number when building. Used with snapshot builds (default: "")
+	  -DGIT_HEAD_OVERRIDE=[XXXXXXX] Specify the 7 digit git commit ref for this build. Used with distribution builds (default: "")
 	```
 
 * If you are on MacOS you must add this parameter to **Cmake**, with the Qt version you have installed<br/> `-DCMAKE_PREFIX_PATH=/usr/local/Cellar/qt5/5.6.2/lib/cmake/`
@@ -128,10 +144,7 @@ DESTDIR=X
 Packaging
 =========
 
-You can create a package to redistribute KeePassXC (zip, deb, rpm, dmg, etc..)
-```
-make package
-```
+You can create a package to redistribute KeePassXC (zip, deb, rpm, dmg, etc..). Refer to [keepassxc-packaging](https://github.com/keepassxreboot/keepassxc-packaging)
 
 
 Testing

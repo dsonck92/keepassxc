@@ -28,7 +28,6 @@
 #include "core/Database.h"
 #include "core/Entry.h"
 #include "core/TimeInfo.h"
-#include "core/Uuid.h"
 
 class Group : public QObject
 {
@@ -43,10 +42,12 @@ public:
     };
     enum MergeMode
     {
-        ModeInherit,
-        KeepBoth,
-        KeepNewer,
-        KeepExisting
+        Default, // Determine merge strategy from parent or fallback (Synchronize)
+        Duplicate, // lossy strategy regarding deletions, duplicate older changes in a new entry
+        KeepLocal, // merge history forcing local as top regardless of age
+        KeepRemote, // merge history forcing remote as top regardless of age
+        KeepNewer, // merge history
+        Synchronize, // merge history keeping most recent as top entry and appling deletions
     };
 
     enum CloneFlag
@@ -63,13 +64,17 @@ public:
         QString name;
         QString notes;
         int iconNumber;
-        Uuid customIcon;
+        QUuid customIcon;
         TimeInfo timeInfo;
         bool isExpanded;
         QString defaultAutoTypeSequence;
         Group::TriState autoTypeEnabled;
         Group::TriState searchingEnabled;
         Group::MergeMode mergeMode;
+
+        bool operator==(const GroupData& other) const;
+        bool operator!=(const GroupData& other) const;
+        bool equals(const GroupData& other, CompareItemOptions options) const;
     };
 
     Group();
@@ -77,15 +82,16 @@ public:
 
     static Group* createRecycleBin();
 
-    Uuid uuid() const;
+    const QUuid& uuid() const;
+    const QString uuidToHex() const;
     QString name() const;
     QString notes() const;
     QImage icon() const;
     QPixmap iconPixmap() const;
     QPixmap iconScaledPixmap() const;
     int iconNumber() const;
-    Uuid iconUuid() const;
-    TimeInfo timeInfo() const;
+    const QUuid& iconUuid() const;
+    const TimeInfo& timeInfo() const;
     bool isExpanded() const;
     QString defaultAutoTypeSequence() const;
     QString effectiveAutoTypeSequence() const;
@@ -96,8 +102,11 @@ public:
     bool resolveAutoTypeEnabled() const;
     Entry* lastTopVisibleEntry() const;
     bool isExpired() const;
+    bool isRecycled() const;
     CustomData* customData();
     const CustomData* customData() const;
+
+    bool equals(const Group* other, CompareItemOptions options) const;
 
     static const int DefaultIconNumber;
     static const int RecycleBinIconNumber;
@@ -106,18 +115,18 @@ public:
     static const QString RootAutoTypeSequence;
 
     Group* findChildByName(const QString& name);
-    Group* findChildByUuid(const Uuid& uuid);
-    Entry* findEntry(QString entryId);
-    Entry* findEntryByUuid(const Uuid& uuid);
-    Entry* findEntryByPath(QString entryPath, QString basePath = QString(""));
-    Group* findGroupByPath(QString groupPath, QString basePath = QString("/"));
-    QStringList locate(QString locateTerm, QString currentPath = QString("/"));
-    Entry* addEntryWithPath(QString entryPath);
-    void setUuid(const Uuid& uuid);
+    Entry* findEntryByUuid(const QUuid& uuid) const;
+    Entry* findEntryByPath(const QString& entryPath);
+    Entry* findEntryBySearchTerm(const QString& term, EntryReferenceType referenceType);
+    Group* findGroupByUuid(const QUuid& uuid);
+    Group* findGroupByPath(const QString& groupPath);
+    QStringList locate(const QString& locateTerm, const QString& currentPath = {"/"}) const;
+    Entry* addEntryWithPath(const QString& entryPath);
+    void setUuid(const QUuid& uuid);
     void setName(const QString& name);
     void setNotes(const QString& notes);
     void setIcon(int iconNumber);
-    void setIcon(const Uuid& uuid);
+    void setIcon(const QUuid& uuid);
     void setTimeInfo(const TimeInfo& timeInfo);
     void setExpanded(bool expanded);
     void setDefaultAutoTypeSequence(const QString& sequence);
@@ -128,12 +137,14 @@ public:
     void setExpiryTime(const QDateTime& dateTime);
     void setMergeMode(MergeMode newMode);
 
+    bool canUpdateTimeinfo() const;
     void setUpdateTimeinfo(bool value);
 
     Group* parentGroup();
     const Group* parentGroup() const;
     void setParent(Group* parent, int index = -1);
-    QStringList hierarchy() const;
+    QStringList hierarchy(int height = -1) const;
+    bool hasChildren() const;
 
     Database* database();
     const Database* database() const;
@@ -141,43 +152,45 @@ public:
     const QList<Group*>& children() const;
     QList<Entry*> entries();
     const QList<Entry*>& entries() const;
+    Entry* findEntryRecursive(const QString& text, EntryReferenceType referenceType, Group* group = nullptr);
+    QList<Entry*> referencesRecursive(const Entry* entry) const;
     QList<Entry*> entriesRecursive(bool includeHistoryItems = false) const;
     QList<const Group*> groupsRecursive(bool includeSelf) const;
     QList<Group*> groupsRecursive(bool includeSelf);
-    QSet<Uuid> customIconsRecursive() const;
-    /**
-     * Creates a duplicate of this group.
-     * Note that you need to copy the custom icons manually when inserting the
-     * new group into another database.
-     */
+    QSet<QUuid> customIconsRecursive() const;
+    QList<QString> usernamesRecursive(int topN = -1) const;
+
     Group* clone(Entry::CloneFlags entryFlags = DefaultEntryCloneFlags,
                  CloneFlags groupFlags = DefaultCloneFlags) const;
 
     void copyDataFrom(const Group* other);
-    void merge(const Group* other);
-    QString print(bool recursive = false, int depth = 0);
+    QString print(bool recursive = false, bool flatten = false, int depth = 0);
+
+    void addEntry(Entry* entry);
+    void removeEntry(Entry* entry);
+
+    void applyGroupIconOnCreateTo(Entry* entry);
+    void applyGroupIconTo(Entry* entry);
+    void applyGroupIconTo(Group* other);
+    void applyGroupIconToChildGroups();
+    void applyGroupIconToChildEntries();
+
+    void sortChildrenRecursively(bool reverse = false);
 
 signals:
-    void dataChanged(Group* group);
-
-    void aboutToAdd(Group* group, int index);
-    void added();
-    void aboutToRemove(Group* group);
-    void removed();
-    /**
-     * Group moved within the database.
-     */
+    void groupDataChanged(Group* group);
+    void groupAboutToAdd(Group* group, int index);
+    void groupAdded();
+    void groupAboutToRemove(Group* group);
+    void groupRemoved();
     void aboutToMove(Group* group, Group* toGroup, int index);
-    void moved();
-
+    void groupMoved();
+    void groupModified();
     void entryAboutToAdd(Entry* entry);
     void entryAdded(Entry* entry);
     void entryAboutToRemove(Entry* entry);
     void entryRemoved(Entry* entry);
-
     void entryDataChanged(Entry* entry);
-
-    void modified();
 
 private slots:
     void updateTimeinfo();
@@ -185,19 +198,17 @@ private slots:
 private:
     template <class P, class V> bool set(P& property, const V& value);
 
-    void addEntry(Entry* entry);
-    void removeEntry(Entry* entry);
     void setParent(Database* db);
-    void markOlderEntry(Entry* entry);
-    void resolveEntryConflict(Entry* existingEntry, Entry* otherEntry);
-    void resolveGroupConflict(Group* existingGroup, Group* otherGroup);
 
-    void recSetDatabase(Database* db);
+    void connectDatabaseSignalsRecursive(Database* db);
     void cleanupParent();
     void recCreateDelObjects();
 
+    Entry* findEntryByPathRecursive(const QString& entryPath, const QString& basePath);
+    Group* findGroupByPathRecursive(const QString& groupPath, const QString& basePath);
+
     QPointer<Database> m_db;
-    Uuid m_uuid;
+    QUuid m_uuid;
     GroupData m_data;
     QPointer<Entry> m_lastTopVisibleEntry;
     QList<Group*> m_children;

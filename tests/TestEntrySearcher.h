@@ -28,15 +28,17 @@ class TestEntrySearcher : public QObject
     Q_OBJECT
 
 private slots:
-    void initTestCase();
-    void cleanupTestCase();
+    void init();
+    void cleanup();
 
     void testAndConcatenationInSearch();
     void testSearch();
     void testAllAttributesAreSearched();
+    void testSearchTermParser();
+    void testCustomAttributesAreSearched();
 
 private:
-    Group* m_groupRoot;
+    Group* m_rootGroup;
     EntrySearcher m_entrySearcher;
     QList<Entry*> m_searchResult;
 };

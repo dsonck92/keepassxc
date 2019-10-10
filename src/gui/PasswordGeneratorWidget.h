@@ -48,14 +48,19 @@ public:
     ~PasswordGeneratorWidget();
     void loadSettings();
     void saveSettings();
-    void reset();
+    void reset(int length = 0);
     void setStandaloneMode(bool standalone);
     QString getGeneratedPassword();
+    bool isPasswordVisible() const;
+
+protected:
+    void showEvent(QShowEvent* event) override;
 
 public slots:
     void regeneratePassword();
     void applyPassword();
     void copyPassword();
+    void setPasswordVisible(bool visible);
 
 signals:
     void appliedPassword(const QString& password);
@@ -64,7 +69,9 @@ signals:
 private slots:
     void updateButtonsEnabled(const QString& password);
     void updatePasswordStrength(const QString& password);
-    void togglePasswordShown(bool hidden);
+    void selectSimpleMode();
+    void selectAdvancedMode();
+    void excludeHexChars();
 
     void passwordSliderMoved();
     void passwordSpinBoxChanged();

@@ -19,43 +19,102 @@
 
 #include "Tools.h"
 
+#include "config-keepassx.h"
+#include "core/Config.h"
+#include "core/Translator.h"
+
+#include "git-info.h"
 #include <QCoreApplication>
+#include <QElapsedTimer>
 #include <QIODevice>
 #include <QImageReader>
 #include <QLocale>
+#include <QRegularExpression>
 #include <QStringList>
+#include <QSysInfo>
+#include <QUuid>
 #include <cctype>
 
-#include <QElapsedTimer>
-
 #ifdef Q_OS_WIN
-#include <aclapi.h> // for SetSecurityInfo()
-#include <windows.h> // for Sleep(), SetDllDirectoryA(), SetSearchPathMode(), ...
+#include <windows.h> // for Sleep()
 #endif
 
 #ifdef Q_OS_UNIX
 #include <time.h> // for nanosleep()
 #endif
 
-#include "config-keepassx.h"
-
-#if defined(HAVE_RLIMIT_CORE)
-#include <sys/resource.h>
-#endif
-
-#if defined(HAVE_PR_SET_DUMPABLE)
-#include <sys/prctl.h>
-#endif
-
-#ifdef HAVE_PT_DENY_ATTACH
-// clang-format off
-#include <sys/types.h>
-#include <sys/ptrace.h>
-// clang-format on
-#endif
-
 namespace Tools
 {
+    QString debugInfo()
+    {
+        QString debugInfo = "KeePassXC - ";
+        debugInfo.append(QObject::tr("Version %1").arg(KEEPASSXC_VERSION).append("\n"));
+#ifndef KEEPASSXC_BUILD_TYPE_RELEASE
+        debugInfo.append(QObject::tr("Build Type: %1").arg(KEEPASSXC_BUILD_TYPE).append("\n"));
+#endif
+
+        QString commitHash;
+        if (!QString(GIT_HEAD).isEmpty()) {
+            commitHash = GIT_HEAD;
+        }
+        if (!commitHash.isEmpty()) {
+            debugInfo.append(QObject::tr("Revision: %1").arg(commitHash.left(7)).append("\n"));
+        }
+
+#ifdef KEEPASSXC_DIST
+        debugInfo.append(QObject::tr("Distribution: %1").arg(KEEPASSXC_DIST_TYPE).append("\n"));
+#endif
+
+        // Qt related debugging information.
+        debugInfo.append("\n");
+        debugInfo.append("Qt ").append(QString::fromLocal8Bit(qVersion())).append("\n");
+#ifdef QT_NO_DEBUG
+        debugInfo.append(QObject::tr("Debugging mode is disabled.").append("\n"));
+#else
+        debugInfo.append(QObject::tr("Debugging mode is enabled.").append("\n"));
+#endif
+        debugInfo.append("\n");
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 4, 0)
+        debugInfo.append(QObject::tr("Operating system: %1\nCPU architecture: %2\nKernel: %3 %4")
+                             .arg(QSysInfo::prettyProductName(),
+                                  QSysInfo::currentCpuArchitecture(),
+                                  QSysInfo::kernelType(),
+                                  QSysInfo::kernelVersion()));
+
+        debugInfo.append("\n\n");
+#endif
+
+        QString extensions;
+#ifdef WITH_XC_AUTOTYPE
+        extensions += "\n- " + QObject::tr("Auto-Type");
+#endif
+#ifdef WITH_XC_BROWSER
+        extensions += "\n- " + QObject::tr("Browser Integration");
+#endif
+#ifdef WITH_XC_SSHAGENT
+        extensions += "\n- " + QObject::tr("SSH Agent");
+#endif
+#if defined(WITH_XC_KEESHARE_SECURE) && defined(WITH_XC_KEESHARE_INSECURE)
+        extensions += "\n- " + QObject::tr("KeeShare (signed and unsigned sharing)");
+#elif defined(WITH_XC_KEESHARE_SECURE)
+        extensions += "\n- " + QObject::tr("KeeShare (only signed sharing)");
+#elif defined(WITH_XC_KEESHARE_INSECURE)
+        extensions += "\n- " + QObject::tr("KeeShare (only unsigned sharing)");
+#endif
+#ifdef WITH_XC_YUBIKEY
+        extensions += "\n- " + QObject::tr("YubiKey");
+#endif
+#ifdef WITH_XC_TOUCHID
+        extensions += "\n- " + QObject::tr("TouchID");
+#endif
+
+        if (extensions.isEmpty())
+            extensions = " " + QObject::tr("None");
+
+        debugInfo.append(QObject::tr("Enabled extensions:").append(extensions).append("\n"));
+        return debugInfo;
+    }
 
     QString humanReadableFileSize(qint64 bytes, quint32 precision)
     {
@@ -75,21 +134,6 @@ namespace Tools
         }
 
         return QString("%1 %2").arg(QLocale().toString(size, 'f', precision), units.at(i));
-    }
-
-    bool hasChild(const QObject* parent, const QObject* child)
-    {
-        if (!parent || !child) {
-            return false;
-        }
-
-        const QObjectList children = parent->children();
-        for (QObject* c : children) {
-            if (child == c || hasChild(c, child)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     bool readFromDevice(QIODevice* device, QByteArray& data, int size)
@@ -135,8 +179,8 @@ namespace Tools
         QStringList formatsStringList;
 
         for (const QByteArray& format : formats) {
-            for (int i = 0; i < format.size(); i++) {
-                if (!QChar(format.at(i)).isLetterOrNumber()) {
+            for (char codePoint : format) {
+                if (!QChar(codePoint).isLetterOrNumber()) {
                     continue;
                 }
             }
@@ -149,7 +193,7 @@ namespace Tools
 
     bool isHex(const QByteArray& ba)
     {
-        for (const unsigned char c : ba) {
+        for (const uchar c : ba) {
             if (!std::isxdigit(c)) {
                 return false;
             }
@@ -160,7 +204,7 @@ namespace Tools
 
     bool isBase64(const QByteArray& ba)
     {
-        constexpr auto pattern = R"(^(?:[a-z0-9+]{4})*(?:[a-z0-9+]{3}=|[a-z0-9+]{2}==)?$)";
+        constexpr auto pattern = R"(^(?:[a-z0-9+/]{4})*(?:[a-z0-9+/]{3}=|[a-z0-9+/]{2}==)?$)";
         QRegExp regexp(pattern, Qt::CaseInsensitive, QRegExp::RegExp2);
 
         QString base64 = QString::fromLatin1(ba.constData(), ba.size());
@@ -212,138 +256,66 @@ namespace Tools
         }
     }
 
-    void disableCoreDumps()
+    // Escape common regex symbols except for *, ?, and |
+    auto regexEscape = QRegularExpression(R"re(([-[\]{}()+.,\\\/^$#]))re");
+
+    QRegularExpression convertToRegex(const QString& string, bool useWildcards, bool exactMatch, bool caseSensitive)
     {
-        // default to true
-        // there is no point in printing a warning if this is not implemented on the platform
-        bool success = true;
+        QString pattern = string;
 
-#if defined(HAVE_RLIMIT_CORE)
-        struct rlimit limit;
-        limit.rlim_cur = 0;
-        limit.rlim_max = 0;
-        success = success && (setrlimit(RLIMIT_CORE, &limit) == 0);
-#endif
-
-#if defined(HAVE_PR_SET_DUMPABLE)
-        success = success && (prctl(PR_SET_DUMPABLE, 0) == 0);
-#endif
-
-// Mac OS X
-#ifdef HAVE_PT_DENY_ATTACH
-        success = success && (ptrace(PT_DENY_ATTACH, 0, 0, 0) == 0);
-#endif
-
-#ifdef Q_OS_WIN
-        success = success && createWindowsDACL();
-#endif
-
-        if (!success) {
-            qWarning("Unable to disable core dumps.");
+        // Wildcard support (*, ?, |)
+        if (useWildcards) {
+            pattern.replace(regexEscape, "\\\\1");
+            pattern.replace("*", ".*");
+            pattern.replace("?", ".");
         }
+
+        // Exact modifier
+        if (exactMatch) {
+            pattern = "^" + pattern + "$";
+        }
+
+        auto regex = QRegularExpression(pattern);
+        if (!caseSensitive) {
+            regex.setPatternOptions(QRegularExpression::CaseInsensitiveOption);
+        }
+
+        return regex;
     }
 
-    void setupSearchPaths()
+    QString uuidToHex(const QUuid& uuid)
     {
-#ifdef Q_OS_WIN
-        // Make sure Windows doesn't load DLLs from the current working directory
-        SetDllDirectoryA("");
-        SetSearchPathMode(BASE_SEARCH_PATH_ENABLE_SAFE_SEARCHMODE);
-#endif
+        return QString::fromLatin1(uuid.toRfc4122().toHex());
     }
 
-    //
-    // This function grants the user associated with the process token minimal access rights and
-    // denies everything else on Windows. This includes PROCESS_QUERY_INFORMATION and
-    // PROCESS_VM_READ access rights that are required for MiniDumpWriteDump() or ReadProcessMemory().
-    // We do this using a discretionary access control list (DACL). Effectively this prevents
-    // crash dumps and disallows other processes from accessing our memory. This works as long
-    // as you do not have admin privileges, since then you are able to grant yourself the
-    // SeDebugPrivilege or SeTakeOwnershipPrivilege and circumvent the DACL.
-    //
-    bool createWindowsDACL()
+    QUuid hexToUuid(const QString& uuid)
     {
-        bool bSuccess = false;
+        return QUuid::fromRfc4122(QByteArray::fromHex(uuid.toLatin1()));
+    }
 
-#ifdef Q_OS_WIN
-        // Process token and user
-        HANDLE hToken = nullptr;
-        PTOKEN_USER pTokenUser = nullptr;
-        DWORD cbBufferSize = 0;
+    Buffer::Buffer()
+        : raw(nullptr)
+        , size(0)
+    {
+    }
 
-        // Access control list
-        PACL pACL = nullptr;
-        DWORD cbACL = 0;
+    Buffer::~Buffer()
+    {
+        clear();
+    }
 
-        // Open the access token associated with the calling process
-        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
-            goto Cleanup;
+    void Buffer::clear()
+    {
+        if (size > 0) {
+            free(raw);
         }
+        raw = nullptr;
+        size = 0;
+    }
 
-        // Retrieve the token information in a TOKEN_USER structure
-        GetTokenInformation(hToken, TokenUser, nullptr, 0, &cbBufferSize);
-
-        pTokenUser = static_cast<PTOKEN_USER>(HeapAlloc(GetProcessHeap(), 0, cbBufferSize));
-        if (pTokenUser == nullptr) {
-            goto Cleanup;
-        }
-
-        if (!GetTokenInformation(hToken, TokenUser, pTokenUser, cbBufferSize, &cbBufferSize)) {
-            goto Cleanup;
-        }
-
-        if (!IsValidSid(pTokenUser->User.Sid)) {
-            goto Cleanup;
-        }
-
-        // Calculate the amount of memory that must be allocated for the DACL
-        cbACL = sizeof(ACL) + sizeof(ACCESS_ALLOWED_ACE) + GetLengthSid(pTokenUser->User.Sid);
-
-        // Create and initialize an ACL
-        pACL = static_cast<PACL>(HeapAlloc(GetProcessHeap(), 0, cbACL));
-        if (pACL == nullptr) {
-            goto Cleanup;
-        }
-
-        if (!InitializeAcl(pACL, cbACL, ACL_REVISION)) {
-            goto Cleanup;
-        }
-
-        // Add allowed access control entries, everything else is denied
-        if (!AddAccessAllowedAce(
-                pACL,
-                ACL_REVISION,
-                SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE, // same as protected process
-                pTokenUser->User.Sid // pointer to the trustee's SID
-                )) {
-            goto Cleanup;
-        }
-
-        // Set discretionary access control list
-        bSuccess = ERROR_SUCCESS
-                   == SetSecurityInfo(GetCurrentProcess(), // object handle
-                                      SE_KERNEL_OBJECT, // type of object
-                                      DACL_SECURITY_INFORMATION, // change only the objects DACL
-                                      nullptr,
-                                      nullptr, // do not change owner or group
-                                      pACL, // DACL specified
-                                      nullptr // do not change SACL
-                      );
-
-    Cleanup:
-
-        if (pACL != nullptr) {
-            HeapFree(GetProcessHeap(), 0, pACL);
-        }
-        if (pTokenUser != nullptr) {
-            HeapFree(GetProcessHeap(), 0, pTokenUser);
-        }
-        if (hToken != nullptr) {
-            CloseHandle(hToken);
-        }
-#endif
-
-        return bSuccess;
+    QByteArray Buffer::content() const
+    {
+        return QByteArray(reinterpret_cast<char*>(raw), size);
     }
 
 } // namespace Tools

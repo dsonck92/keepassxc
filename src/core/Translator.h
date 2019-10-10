@@ -18,6 +18,7 @@
 #ifndef KEEPASSX_TRANSLATOR_H
 #define KEEPASSX_TRANSLATOR_H
 
+#include <QLocale>
 #include <QPair>
 #include <QString>
 
@@ -28,8 +29,8 @@ public:
     static QList<QPair<QString, QString>> availableLanguages();
 
 private:
-    static bool installTranslator(const QString& language, const QString& path);
-    static bool installQtTranslator(const QString& language, const QString& path);
+    static bool installTranslator(const QStringList& languages, const QString& path);
+    static bool installQtTranslator(const QStringList& languages, const QString& path);
 };
 
 #endif // KEEPASSX_TRANSLATOR_H

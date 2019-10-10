@@ -18,13 +18,15 @@
 
 #include "EntryAttributes.h"
 
+#include "core/Global.h"
+
 const QString EntryAttributes::TitleKey = "Title";
 const QString EntryAttributes::UserNameKey = "UserName";
 const QString EntryAttributes::PasswordKey = "Password";
 const QString EntryAttributes::URLKey = "URL";
 const QString EntryAttributes::NotesKey = "Notes";
-const QStringList EntryAttributes::DefaultAttributes(QStringList() << TitleKey << UserNameKey << PasswordKey << URLKey
-                                                                   << NotesKey);
+const QStringList EntryAttributes::DefaultAttributes(QStringList()
+                                                     << TitleKey << UserNameKey << PasswordKey << URLKey << NotesKey);
 
 const QString EntryAttributes::WantedFieldGroupName = "WantedField";
 const QString EntryAttributes::SearchInGroupName = "SearchIn";
@@ -65,6 +67,15 @@ QString EntryAttributes::value(const QString& key) const
     return m_attributes.value(key);
 }
 
+QList<QString> EntryAttributes::values(const QList<QString>& keys) const
+{
+    QList<QString> values;
+    for (const QString& key : keys) {
+        values.append(m_attributes.value(key));
+    }
+    return values;
+}
+
 bool EntryAttributes::contains(const QString& key) const
 {
     return m_attributes.contains(key);
@@ -72,7 +83,7 @@ bool EntryAttributes::contains(const QString& key) const
 
 bool EntryAttributes::containsValue(const QString& value) const
 {
-    return m_attributes.values().contains(value);
+    return asConst(m_attributes).values().contains(value);
 }
 
 bool EntryAttributes::isProtected(const QString& key) const
@@ -118,7 +129,7 @@ void EntryAttributes::set(const QString& key, const QString& value, bool protect
     }
 
     if (emitModified) {
-        emit modified();
+        emit entryAttributesModified();
     }
 
     if (defaultAttribute && changeValue) {
@@ -135,7 +146,6 @@ void EntryAttributes::remove(const QString& key)
     Q_ASSERT(!isDefaultAttribute(key));
 
     if (!m_attributes.contains(key)) {
-        Q_ASSERT(false);
         return;
     }
 
@@ -145,7 +155,7 @@ void EntryAttributes::remove(const QString& key)
     m_protectedAttributes.remove(key);
 
     emit removed(key);
-    emit modified();
+    emit entryAttributesModified();
 }
 
 void EntryAttributes::rename(const QString& oldKey, const QString& newKey)
@@ -175,7 +185,7 @@ void EntryAttributes::rename(const QString& oldKey, const QString& newKey)
         m_protectedAttributes.insert(newKey);
     }
 
-    emit modified();
+    emit entryAttributesModified();
     emit renamed(oldKey, newKey);
 }
 
@@ -207,7 +217,7 @@ void EntryAttributes::copyCustomKeysFrom(const EntryAttributes* other)
     }
 
     emit reset();
-    emit modified();
+    emit entryAttributesModified();
 }
 
 bool EntryAttributes::areCustomKeysDifferent(const EntryAttributes* other)
@@ -240,8 +250,26 @@ void EntryAttributes::copyDataFrom(const EntryAttributes* other)
         m_protectedAttributes = other->m_protectedAttributes;
 
         emit reset();
-        emit modified();
+        emit entryAttributesModified();
     }
+}
+
+QUuid EntryAttributes::referenceUuid(const QString& key) const
+{
+    if (!m_attributes.contains(key)) {
+        Q_ASSERT(false);
+        return {};
+    }
+
+    auto match = matchReference(value(key));
+    if (match.hasMatch()) {
+        const QString uuid = match.captured("SearchText");
+        if (!uuid.isEmpty()) {
+            return QUuid::fromRfc4122(QByteArray::fromHex(uuid.toLatin1()));
+        }
+    }
+
+    return {};
 }
 
 bool EntryAttributes::operator==(const EntryAttributes& other) const
@@ -275,7 +303,7 @@ void EntryAttributes::clear()
     }
 
     emit reset();
-    emit modified();
+    emit entryAttributesModified();
 }
 
 int EntryAttributes::attributesSize() const
