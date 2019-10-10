@@ -911,6 +911,9 @@ void DatabaseWidget::loadDatabase(bool accepted)
         m_fileWatcher->restart();
         m_saveAttempts = 0;
         emit databaseUnlocked();
+        if (config()->get("MinimizeAfterUnlock").toBool()) {
+            window()->showMinimized();
+        }
     } else {
         m_fileWatcher->stop();
         if (m_databaseOpenWidget->database()) {
@@ -984,7 +987,8 @@ void DatabaseWidget::unlockDatabase(bool accepted)
     }
     replaceDatabase(db);
     if (db->isReadOnly()) {
-        showMessage(tr("File opened in read only mode."), MessageWidget::Warning, false, -1);
+        showMessage(
+            tr("This database is opened in read-only mode. Autosave is disabled."), MessageWidget::Warning, false, -1);
     }
 
     restoreGroupEntryFocus(m_groupBeforeLock, m_entryBeforeLock);
@@ -1225,7 +1229,7 @@ void DatabaseWidget::onGroupChanged(Group* group)
 
 void DatabaseWidget::onDatabaseModified()
 {
-    if (!m_blockAutoSave && config()->get("AutoSaveAfterEveryChange").toBool()) {
+    if (!m_blockAutoSave && config()->get("AutoSaveAfterEveryChange").toBool() && !m_db->isReadOnly()) {
         save();
     } else {
         // Only block once, then reset
@@ -1653,13 +1657,8 @@ bool DatabaseWidget::saveAs()
             oldFilePath = QDir::toNativeSeparators(config()->get("LastDir", QDir::homePath()).toString() + "/"
                                                    + tr("Passwords").append(".kdbx"));
         }
-        QString newFilePath = fileDialog()->getSaveFileName(this,
-                                                            tr("Save database as"),
-                                                            oldFilePath,
-                                                            tr("KeePass 2 Database").append(" (*.kdbx)"),
-                                                            nullptr,
-                                                            nullptr,
-                                                            "kdbx");
+        const QString newFilePath = fileDialog()->getSaveFileName(
+            this, tr("Save database as"), oldFilePath, tr("KeePass 2 Database").append(" (*.kdbx)"), nullptr, nullptr);
 
         if (!newFilePath.isEmpty()) {
             // Ensure we don't recurse back into this function
@@ -1739,6 +1738,8 @@ void DatabaseWidget::processAutoOpen()
             continue;
         }
         QFileInfo filepath;
+        QFileInfo keyfile;
+
         if (entry->url().startsWith("file://")) {
             QUrl url(entry->url());
             filepath.setFile(url.toLocalFile());
@@ -1754,7 +1755,20 @@ void DatabaseWidget::processAutoOpen()
             continue;
         }
 
-        // Request to open the database file in the background
-        emit requestOpenDatabase(filepath.canonicalFilePath(), true, entry->password());
+        if (!entry->username().isEmpty()) {
+            if (entry->username().startsWith("file://")) {
+                QUrl keyfileUrl(entry->username());
+                keyfile.setFile(keyfileUrl.toLocalFile());
+            } else {
+                keyfile.setFile(entry->username());
+                if (keyfile.isRelative()) {
+                    QFileInfo currentpath(m_db->filePath());
+                    keyfile.setFile(currentpath.absoluteDir(), entry->username());
+                }
+            }
+        }
+
+        // Request to open the database file in the background with a password and keyfile
+        emit requestOpenDatabase(filepath.canonicalFilePath(), true, entry->password(), keyfile.canonicalFilePath());
     }
 }

@@ -89,6 +89,13 @@ void Config::sync()
     m_settings->sync();
 }
 
+void Config::resetToDefaults()
+{
+    for (const auto& setting : m_defaults.keys()) {
+        m_settings->setValue(setting, m_defaults.value(setting));
+    }
+}
+
 void Config::upgrade()
 {
     const auto keys = deprecationMap.keys();
@@ -186,6 +193,7 @@ void Config::init(const QString& fileName)
     m_defaults.insert("MinimizeOnOpenUrl", false);
     m_defaults.insert("HideWindowOnCopy", false);
     m_defaults.insert("MinimizeOnCopy", true);
+    m_defaults.insert("MinimizeAfterUnlock", false);
     m_defaults.insert("DropToBackgroundOnCopy", false);
     m_defaults.insert("UseGroupIconOnEntryCreation", false);
     m_defaults.insert("AutoTypeEntryTitleMatch", true);
@@ -197,6 +205,8 @@ void Config::init(const QString& fileName)
     m_defaults.insert("FaviconDownloadTimeout", 10);
     m_defaults.insert("security/clearclipboard", true);
     m_defaults.insert("security/clearclipboardtimeout", 10);
+    m_defaults.insert("security/clearsearch", true);
+    m_defaults.insert("security/clearsearchtimeout", 5);
     m_defaults.insert("security/lockdatabaseidle", false);
     m_defaults.insert("security/lockdatabaseidlesec", 240);
     m_defaults.insert("security/lockdatabaseminimize", false);

@@ -17,12 +17,12 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <QCheckBox>
 #include <QInputDialog>
 #include <QJsonArray>
 #include <QMessageBox>
 #include <QProgressDialog>
 #include <QUuid>
-#include <QCheckBox>
 
 #include "BrowserAccessControlDialog.h"
 #include "BrowserEntryConfig.h"
@@ -50,6 +50,9 @@ static int KEEPASSXCBROWSER_DEFAULT_ICON = 1;
 const char BrowserService::LEGACY_ASSOCIATE_KEY_PREFIX[] = "Public Key: ";
 static const char KEEPASSHTTP_NAME[] = "KeePassHttp Settings";
 static const char KEEPASSHTTP_GROUP_NAME[] = "KeePassHttp Passwords";
+// Extra entry related options saved in custom data
+const char BrowserService::OPTION_SKIP_AUTO_SUBMIT[] = "BrowserSkipAutoSubmit";
+const char BrowserService::OPTION_HIDE_ENTRY[] = "BrowserHideEntry";
 
 BrowserService::BrowserService(DatabaseTabWidget* parent)
     : m_dbTabWidget(parent)
@@ -375,6 +378,11 @@ QJsonArray BrowserService::findMatchingEntries(const QString& id,
     QList<Entry*> pwEntriesToConfirm;
     QList<Entry*> pwEntries;
     for (Entry* entry : searchEntries(url, keyList)) {
+        if (entry->customData()->contains(BrowserService::OPTION_HIDE_ENTRY) &&
+            entry->customData()->value(BrowserService::OPTION_HIDE_ENTRY) == "true") {
+            continue;
+        }
+
         // HTTP Basic Auth always needs a confirmation
         if (!ignoreHttpAuth && httpAuth) {
             pwEntriesToConfirm.append(entry);
@@ -400,7 +408,7 @@ QJsonArray BrowserService::findMatchingEntries(const QString& id,
     }
 
     // Confirm entries
-    if (confirmEntries(pwEntriesToConfirm, url, host, submitHost, realm)) {
+    if (confirmEntries(pwEntriesToConfirm, url, host, submitHost, realm, httpAuth)) {
         pwEntries.append(pwEntriesToConfirm);
     }
 
@@ -605,6 +613,18 @@ BrowserService::searchEntries(const QSharedPointer<Database>& db, const QString&
 
 QList<Entry*> BrowserService::searchEntries(const QString& url, const StringPairList& keyList)
 {
+    // Check if database is connected with KeePassXC-Browser
+    auto databaseConnected = [&](const QSharedPointer<Database>& db) {
+        for (const StringPair& keyPair : keyList) {
+            QString key =
+                db->metadata()->customData()->value(QLatin1String(ASSOCIATE_KEY_PREFIX) + keyPair.first);
+            if (!key.isEmpty() && keyPair.second == key) {
+                return true;
+            }
+        }
+        return false;
+    };
+
     // Get the list of databases to search
     QList<QSharedPointer<Database>> databases;
     if (browserSettings()->searchInAllDatabases()) {
@@ -612,19 +632,16 @@ QList<Entry*> BrowserService::searchEntries(const QString& url, const StringPair
         for (int i = 0; i < count; ++i) {
             if (auto* dbWidget = qobject_cast<DatabaseWidget*>(m_dbTabWidget->widget(i))) {
                 if (const auto& db = dbWidget->database()) {
-                    // Check if database is connected with KeePassXC-Browser
-                    for (const StringPair& keyPair : keyList) {
-                        QString key =
-                            db->metadata()->customData()->value(QLatin1String(ASSOCIATE_KEY_PREFIX) + keyPair.first);
-                        if (!key.isEmpty() && keyPair.second == key) {
-                            databases << db;
-                        }
+                    if (databaseConnected(db)) {
+                        databases << db;
                     }
                 }
             }
         }
     } else if (const auto& db = getDatabase()) {
-        databases << db;
+        if (databaseConnected(db)) {
+            databases << db;
+        }
     }
 
     // Search entries matching the hostname
@@ -764,7 +781,8 @@ bool BrowserService::confirmEntries(QList<Entry*>& pwEntriesToConfirm,
                                     const QString& url,
                                     const QString& host,
                                     const QString& submitHost,
-                                    const QString& realm)
+                                    const QString& realm,
+                                    const bool httpAuth)
 {
     if (pwEntriesToConfirm.isEmpty() || m_dialogActive) {
         return false;
@@ -775,6 +793,7 @@ bool BrowserService::confirmEntries(QList<Entry*>& pwEntriesToConfirm,
     connect(m_dbTabWidget, SIGNAL(databaseLocked(DatabaseWidget*)), &accessControlDialog, SLOT(reject()));
     accessControlDialog.setUrl(url);
     accessControlDialog.setItems(pwEntriesToConfirm);
+    accessControlDialog.setHTTPAuth(httpAuth);
 
     raiseWindow();
     accessControlDialog.show();
@@ -826,6 +845,10 @@ QJsonObject BrowserService::prepareEntry(const Entry* entry)
 
     if (entry->isExpired()) {
         res["expired"] = "true";
+    }
+
+    if (entry->customData()->contains(BrowserService::OPTION_SKIP_AUTO_SUBMIT)) {
+        res["skipAutoSubmit"] = entry->customData()->value(BrowserService::OPTION_SKIP_AUTO_SUBMIT);
     }
 
     if (browserSettings()->supportKphFields()) {

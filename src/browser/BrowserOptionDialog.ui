@@ -304,7 +304,7 @@
        <item>
         <widget class="QCheckBox" name="searchInAllDatabases">
          <property name="toolTip">
-          <string>Only the selected database has to be connected with a client.</string>
+          <string>All databases connected to the extension will return matching credentials.</string>
          </property>
          <property name="text">
           <string extracomment="Credentials mean login data requested via browser extension">Searc&amp;h in all opened databases for matching credentials</string>
@@ -365,6 +365,9 @@
         <layout class="QHBoxLayout" name="horizontalLayout">
          <item>
           <widget class="QLineEdit" name="customProxyLocation">
+           <property name="accessibleName">
+            <string>Custom proxy location field</string>
+           </property>
            <property name="maxLength">
             <number>999</number>
            </property>
@@ -375,6 +378,9 @@
          </item>
          <item>
           <widget class="QPushButton" name="customProxyLocationBrowseButton">
+           <property name="accessibleName">
+            <string>Browser for custom proxy file</string>
+           </property>
            <property name="text">
             <string extracomment="Button for opening file dialog">Browse...</string>
            </property>

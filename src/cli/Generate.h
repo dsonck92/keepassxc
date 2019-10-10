@@ -20,12 +20,15 @@
 
 #include "Command.h"
 
+#include "core/PasswordGenerator.h"
+
 class Generate : public Command
 {
 public:
     Generate();
-    ~Generate();
     int execute(const QStringList& arguments) override;
+
+    static QSharedPointer<PasswordGenerator> createGenerator(QSharedPointer<QCommandLineParser> parser);
 
     static const QCommandLineOption PasswordLengthOption;
     static const QCommandLineOption LowerCaseOption;

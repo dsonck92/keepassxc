@@ -69,6 +69,9 @@
         <verstretch>0</verstretch>
        </sizepolicy>
       </property>
+      <property name="focusPolicy">
+       <enum>Qt::TabFocus</enum>
+      </property>
       <property name="currentIndex">
        <number>2</number>
       </property>
@@ -116,7 +119,11 @@
          <number>0</number>
         </property>
         <item>
-         <widget class="ApplicationSettingsWidget" name="settingsWidget" native="true"/>
+         <widget class="ApplicationSettingsWidget" name="settingsWidget" native="true">
+          <property name="focusPolicy">
+           <enum>Qt::TabFocus</enum>
+          </property>
+         </widget>
         </item>
        </layout>
       </widget>
@@ -141,7 +148,11 @@
            </spacer>
           </item>
           <item>
-           <widget class="WelcomeWidget" name="welcomeWidget" native="true"/>
+           <widget class="WelcomeWidget" name="welcomeWidget" native="true">
+            <property name="focusPolicy">
+             <enum>Qt::TabFocus</enum>
+            </property>
+           </widget>
           </item>
           <item>
            <spacer name="horizontalSpacer_2">
@@ -166,7 +177,11 @@
       <widget class="QWidget" name="pagePasswordGenerator">
        <layout class="QVBoxLayout" name="verticalLayout_6">
         <item>
-         <widget class="PasswordGeneratorWidget" name="passwordGeneratorWidget" native="true"/>
+         <widget class="PasswordGeneratorWidget" name="passwordGeneratorWidget" native="true">
+          <property name="focusPolicy">
+           <enum>Qt::TabFocus</enum>
+          </property>
+         </widget>
         </item>
        </layout>
       </widget>
@@ -180,8 +195,11 @@
      <x>0</x>
      <y>0</y>
      <width>800</width>
-     <height>21</height>
+     <height>20</height>
     </rect>
+   </property>
+   <property name="focusPolicy">
+    <enum>Qt::NoFocus</enum>
    </property>
    <property name="contextMenuPolicy">
     <enum>Qt::PreventContextMenu</enum>
@@ -234,6 +252,7 @@
     <addaction name="separator"/>
     <addaction name="actionGettingStarted"/>
     <addaction name="actionUserGuide"/>
+    <addaction name="actionKeyboardShortcuts"/>
     <addaction name="actionOnlineHelp"/>
     <addaction name="separator"/>
     <addaction name="actionCheckForUpdates"/>
@@ -316,6 +335,9 @@
    <addaction name="menuHelp"/>
   </widget>
   <widget class="QToolBar" name="toolBar">
+   <property name="focusPolicy">
+    <enum>Qt::NoFocus</enum>
+   </property>
    <property name="contextMenuPolicy">
     <enum>Qt::PreventContextMenu</enum>
    </property>
@@ -736,6 +758,14 @@
    </property>
    <property name="toolTip">
     <string>Open User Guide PDF</string>
+   </property>
+  </action>
+  <action name="actionKeyboardShortcuts">
+   <property name="text">
+    <string>&amp;Keyboard Shortcuts</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+/</string>
    </property>
   </action>
  </widget>

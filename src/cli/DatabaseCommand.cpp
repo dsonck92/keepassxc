@@ -24,23 +24,40 @@ DatabaseCommand::DatabaseCommand()
     positionalArguments.append({QString("database"), QObject::tr("Path of the database."), QString("")});
     options.append(Command::KeyFileOption);
     options.append(Command::NoPasswordOption);
+#ifdef WITH_XC_YUBIKEY
+    options.append(Command::YubiKeyOption);
+#endif
 }
 
 int DatabaseCommand::execute(const QStringList& arguments)
 {
-    QSharedPointer<QCommandLineParser> parser = getCommandLineParser(arguments);
+    QStringList amendedArgs(arguments);
+    if (currentDatabase) {
+        amendedArgs.insert(1, currentDatabase->filePath());
+    }
+    QSharedPointer<QCommandLineParser> parser = getCommandLineParser(amendedArgs);
+
     if (parser.isNull()) {
         return EXIT_FAILURE;
     }
 
-    const QStringList args = parser->positionalArguments();
-    auto db = Utils::unlockDatabase(args.at(0),
-                                    !parser->isSet(Command::NoPasswordOption),
-                                    parser->value(Command::KeyFileOption),
-                                    parser->isSet(Command::QuietOption) ? Utils::DEVNULL : Utils::STDOUT,
-                                    Utils::STDERR);
+    QStringList args = parser->positionalArguments();
+    auto db = currentDatabase;
     if (!db) {
-        return EXIT_FAILURE;
+        // It would be nice to update currentDatabase here, but the CLI tests frequently
+        // re-use Command objects to exercise non-interactive behavior. Updating the current
+        // database confuses these tests. Because of this, we leave it up to the interactive
+        // mode implementation in the main command loop to update currentDatabase
+        // (see keepassxc-cli.cpp).
+        db = Utils::unlockDatabase(args.at(0),
+                                   !parser->isSet(Command::NoPasswordOption),
+                                   parser->value(Command::KeyFileOption),
+                                   parser->value(Command::YubiKeyOption),
+                                   parser->isSet(Command::QuietOption) ? Utils::DEVNULL : Utils::STDOUT,
+                                   Utils::STDERR);
+        if (!db) {
+            return EXIT_FAILURE;
+        }
     }
 
     return executeWithDatabase(db, parser);

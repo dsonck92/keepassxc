@@ -28,6 +28,7 @@
 #include "core/Global.h"
 #include "core/Translator.h"
 
+#include "MessageBox.h"
 #include "touchid/TouchID.h"
 
 class ApplicationSettingsWidget::ExtraPage
@@ -52,6 +53,28 @@ public:
 private:
     QSharedPointer<ISettingsPage> settingsPage;
     QWidget* widget;
+};
+
+/**
+ * Helper class to ignore mouse wheel events on non-focused widgets
+ * NOTE: The widget must NOT have a focus policy of "WHEEL"
+ */
+class MouseWheelEventFilter : public QObject
+{
+public:
+    explicit MouseWheelEventFilter(QObject* parent)
+        : QObject(parent){};
+
+protected:
+    bool eventFilter(QObject* obj, QEvent* event) override
+    {
+        const auto* widget = qobject_cast<QWidget*>(obj);
+        if (event->type() == QEvent::Wheel && widget && !widget->hasFocus()) {
+            event->ignore();
+            return true;
+        }
+        return QObject::eventFilter(obj, event);
+    }
 };
 
 ApplicationSettingsWidget::ApplicationSettingsWidget(QWidget* parent)
@@ -84,14 +107,24 @@ ApplicationSettingsWidget::ApplicationSettingsWidget(QWidget* parent)
     connect(m_generalUi->systrayShowCheckBox, SIGNAL(toggled(bool)), SLOT(systrayToggled(bool)));
     connect(m_generalUi->toolbarHideCheckBox, SIGNAL(toggled(bool)), SLOT(toolbarSettingsToggled(bool)));
     connect(m_generalUi->rememberLastDatabasesCheckBox, SIGNAL(toggled(bool)), SLOT(rememberDatabasesToggled(bool)));
+    connect(m_generalUi->resetSettingsButton, SIGNAL(clicked()), SLOT(resetSettings()));
 
     connect(m_secUi->clearClipboardCheckBox, SIGNAL(toggled(bool)),
             m_secUi->clearClipboardSpinBox, SLOT(setEnabled(bool)));
+    connect(m_secUi->clearSearchCheckBox, SIGNAL(toggled(bool)),
+            m_secUi->clearSearchSpinBox, SLOT(setEnabled(bool)));
     connect(m_secUi->lockDatabaseIdleCheckBox, SIGNAL(toggled(bool)),
             m_secUi->lockDatabaseIdleSpinBox, SLOT(setEnabled(bool)));
     connect(m_secUi->touchIDResetCheckBox, SIGNAL(toggled(bool)),
             m_secUi->touchIDResetSpinBox, SLOT(setEnabled(bool)));
     // clang-format on
+
+    // Disable mouse wheel grab when scrolling
+    // This prevents combo box and spinner values from changing without explicit focus
+    auto mouseWheelFilter = new MouseWheelEventFilter(this);
+    m_generalUi->faviconTimeoutSpinBox->installEventFilter(mouseWheelFilter);
+    m_generalUi->toolButtonStyleComboBox->installEventFilter(mouseWheelFilter);
+    m_generalUi->languageComboBox->installEventFilter(mouseWheelFilter);
 
 #ifdef WITH_XC_UPDATECHECK
     connect(m_generalUi->checkForUpdatesOnStartupCheckBox, SIGNAL(toggled(bool)), SLOT(checkUpdatesToggled(bool)));
@@ -150,6 +183,7 @@ void ApplicationSettingsWidget::loadSettings()
     m_generalUi->backupBeforeSaveCheckBox->setChecked(config()->get("BackupBeforeSave").toBool());
     m_generalUi->useAtomicSavesCheckBox->setChecked(config()->get("UseAtomicSaves").toBool());
     m_generalUi->autoReloadOnChangeCheckBox->setChecked(config()->get("AutoReloadOnChange").toBool());
+    m_generalUi->minimizeAfterUnlockCheckBox->setChecked(config()->get("MinimizeAfterUnlock").toBool());
     m_generalUi->minimizeOnOpenUrlCheckBox->setChecked(config()->get("MinimizeOnOpenUrl").toBool());
     m_generalUi->hideWindowOnCopyCheckBox->setChecked(config()->get("HideWindowOnCopy").toBool());
     m_generalUi->minimizeOnCopyRadioButton->setChecked(config()->get("MinimizeOnCopy").toBool());
@@ -215,6 +249,9 @@ void ApplicationSettingsWidget::loadSettings()
     m_secUi->clearClipboardCheckBox->setChecked(config()->get("security/clearclipboard").toBool());
     m_secUi->clearClipboardSpinBox->setValue(config()->get("security/clearclipboardtimeout").toInt());
 
+    m_secUi->clearSearchCheckBox->setChecked(config()->get("security/clearsearch").toBool());
+    m_secUi->clearSearchSpinBox->setValue(config()->get("security/clearsearchtimeout").toInt());
+
     m_secUi->lockDatabaseIdleCheckBox->setChecked(config()->get("security/lockdatabaseidle").toBool());
     m_secUi->lockDatabaseIdleSpinBox->setValue(config()->get("security/lockdatabaseidlesec").toInt());
     m_secUi->lockDatabaseMinimizeCheckBox->setChecked(config()->get("security/lockdatabaseminimize").toBool());
@@ -241,7 +278,6 @@ void ApplicationSettingsWidget::loadSettings()
 
 void ApplicationSettingsWidget::saveSettings()
 {
-
     if (config()->hasAccessError()) {
         showMessage(tr("Access error for config file %1").arg(config()->getFileName()), MessageWidget::Error);
         // We prevent closing the settings page if we could not write to
@@ -258,6 +294,7 @@ void ApplicationSettingsWidget::saveSettings()
     config()->set("BackupBeforeSave", m_generalUi->backupBeforeSaveCheckBox->isChecked());
     config()->set("UseAtomicSaves", m_generalUi->useAtomicSavesCheckBox->isChecked());
     config()->set("AutoReloadOnChange", m_generalUi->autoReloadOnChangeCheckBox->isChecked());
+    config()->set("MinimizeAfterUnlock", m_generalUi->minimizeAfterUnlockCheckBox->isChecked());
     config()->set("MinimizeOnOpenUrl", m_generalUi->minimizeOnOpenUrlCheckBox->isChecked());
     config()->set("HideWindowOnCopy", m_generalUi->hideWindowOnCopyCheckBox->isChecked());
     config()->set("MinimizeOnCopy", m_generalUi->minimizeOnCopyRadioButton->isChecked());
@@ -299,6 +336,9 @@ void ApplicationSettingsWidget::saveSettings()
     config()->set("security/clearclipboard", m_secUi->clearClipboardCheckBox->isChecked());
     config()->set("security/clearclipboardtimeout", m_secUi->clearClipboardSpinBox->value());
 
+    config()->set("security/clearsearch", m_secUi->clearSearchCheckBox->isChecked());
+    config()->set("security/clearsearchtimeout", m_secUi->clearSearchSpinBox->value());
+
     config()->set("security/lockdatabaseidle", m_secUi->lockDatabaseIdleCheckBox->isChecked());
     config()->set("security/lockdatabaseidlesec", m_secUi->lockDatabaseIdleSpinBox->value());
     config()->set("security/lockdatabaseminimize", m_secUi->lockDatabaseMinimizeCheckBox->isChecked());
@@ -322,6 +362,7 @@ void ApplicationSettingsWidget::saveSettings()
         config()->set("LastDatabases", {});
         config()->set("OpenPreviousDatabasesOnStartup", {});
         config()->set("LastActiveDatabase", {});
+        config()->set("LastAttachmentDir", {});
     }
 
     if (!config()->get("RememberLastKeyFiles").toBool()) {
@@ -332,6 +373,48 @@ void ApplicationSettingsWidget::saveSettings()
     for (const ExtraPage& page : asConst(m_extraPages)) {
         page.saveSettings();
     }
+}
+
+void ApplicationSettingsWidget::resetSettings()
+{
+    // Confirm reset
+    auto ans = MessageBox::question(this,
+                                    tr("Reset Settings?"),
+                                    tr("Are you sure you want to reset all general and security settings to default?"),
+                                    MessageBox::Reset | MessageBox::Cancel,
+                                    MessageBox::Cancel);
+    if (ans == MessageBox::Cancel) {
+        return;
+    }
+
+    if (config()->hasAccessError()) {
+        showMessage(tr("Access error for config file %1").arg(config()->getFileName()), MessageWidget::Error);
+        // We prevent closing the settings page if we could not write to
+        // the config file.
+        return;
+    }
+
+    // Reset general and security settings to default
+    config()->resetToDefaults();
+
+    // Clear recently used data
+    config()->set("LastDatabases", {});
+    config()->set("OpenPreviousDatabasesOnStartup", {});
+    config()->set("LastActiveDatabase", {});
+    config()->set("LastAttachmentDir", {});
+    config()->set("LastKeyFiles", {});
+    config()->set("LastDir", "");
+
+    // Save the Extra Pages (these are NOT reset)
+    for (const ExtraPage& page : asConst(m_extraPages)) {
+        page.saveSettings();
+    }
+
+    config()->sync();
+
+    // Refresh the settings widget and notify listeners
+    loadSettings();
+    emit settingsReset();
 }
 
 void ApplicationSettingsWidget::reject()

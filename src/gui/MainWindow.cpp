@@ -343,7 +343,7 @@ MainWindow::MainWindow()
     connect(m_ui->stackedWidget, SIGNAL(currentChanged(int)), SLOT(setMenuActionState()));
     connect(m_ui->stackedWidget, SIGNAL(currentChanged(int)), SLOT(updateWindowTitle()));
     connect(m_ui->settingsWidget, SIGNAL(accepted()), SLOT(applySettingsChanges()));
-    connect(m_ui->settingsWidget, SIGNAL(apply()), SLOT(applySettingsChanges()));
+    connect(m_ui->settingsWidget, SIGNAL(settingsReset()), SLOT(applySettingsChanges()));
     connect(m_ui->settingsWidget, SIGNAL(accepted()), SLOT(switchToDatabases()));
     connect(m_ui->settingsWidget, SIGNAL(rejected()), SLOT(switchToDatabases()));
 
@@ -407,6 +407,7 @@ MainWindow::MainWindow()
     connect(m_ui->actionGettingStarted, SIGNAL(triggered()), SLOT(openGettingStartedGuide()));
     connect(m_ui->actionUserGuide, SIGNAL(triggered()), SLOT(openUserGuide()));
     connect(m_ui->actionOnlineHelp, SIGNAL(triggered()), SLOT(openOnlineHelp()));
+    connect(m_ui->actionKeyboardShortcuts, SIGNAL(triggered()), SLOT(openKeyboardShortcuts()));
 
 #ifdef Q_OS_MACOS
     setUnifiedTitleAndToolBarOnMac(true);
@@ -597,7 +598,9 @@ void MainWindow::setMenuActionState(DatabaseWidget::Mode mode)
             m_ui->actionEntryDelete->setEnabled(entriesSelected);
             m_ui->actionEntryCopyTitle->setEnabled(singleEntrySelected && dbWidget->currentEntryHasTitle());
             m_ui->actionEntryCopyUsername->setEnabled(singleEntrySelected && dbWidget->currentEntryHasUsername());
-            m_ui->actionEntryCopyPassword->setEnabled(singleEntrySelected && dbWidget->currentEntryHasPassword());
+            // NOTE: Copy password is enabled even if the selected entry's password is blank to prevent Ctrl+C
+            // from copying information from the currently selected cell in the entry view table.
+            m_ui->actionEntryCopyPassword->setEnabled(singleEntrySelected);
             m_ui->actionEntryCopyURL->setEnabled(singleEntrySelected && dbWidget->currentEntryHasUrl());
             m_ui->actionEntryCopyNotes->setEnabled(singleEntrySelected && dbWidget->currentEntryHasNotes());
             m_ui->menuEntryCopyAttribute->setEnabled(singleEntrySelected);
@@ -802,18 +805,24 @@ void MainWindow::openBugReportUrl()
 
 void MainWindow::openGettingStartedGuide()
 {
-    customOpenUrl(filePath()->dataPath("docs/KeePassXC_GettingStarted.pdf"));
+    customOpenUrl(QString("file:///%1").arg(filePath()->dataPath("docs/KeePassXC_GettingStarted.pdf")));
 }
 
 void MainWindow::openUserGuide()
 {
-    customOpenUrl(filePath()->dataPath("docs/KeePassXC_UserGuide.pdf"));
+    customOpenUrl(QString("file:///%1").arg(filePath()->dataPath("docs/KeePassXC_UserGuide.pdf")));
 }
 
 void MainWindow::openOnlineHelp()
 {
     customOpenUrl("https://keepassxc.org/docs/");
 }
+
+void MainWindow::openKeyboardShortcuts()
+{
+    customOpenUrl("https://github.com/keepassxreboot/keepassxc/blob/develop/docs/KEYBINDS.md");
+}
+
 void MainWindow::switchToDatabases()
 {
     if (m_ui->tabWidget->currentIndex() == -1) {
@@ -1044,10 +1053,10 @@ void MainWindow::updateTrayIcon()
 #else
             menu->addAction(m_ui->actionQuit);
 
+#endif
             connect(m_trayIcon,
                     SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
                     SLOT(trayIconTriggered(QSystemTrayIcon::ActivationReason)));
-#endif
             connect(actionToggle, SIGNAL(triggered()), SLOT(toggleWindow()));
 
             m_trayIcon->setContextMenu(menu);

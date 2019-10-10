@@ -201,8 +201,9 @@ void DatabaseTabWidget::addDatabaseTab(DatabaseWidget* dbWidget, bool inBackgrou
     }
 
     connect(dbWidget, SIGNAL(databaseFilePathChanged(QString, QString)), SLOT(updateTabName()));
-    connect(
-        dbWidget, SIGNAL(requestOpenDatabase(QString, bool, QString)), SLOT(addDatabaseTab(QString, bool, QString)));
+    connect(dbWidget,
+            SIGNAL(requestOpenDatabase(QString, bool, QString, QString)),
+            SLOT(addDatabaseTab(QString, bool, QString, QString)));
     connect(dbWidget, SIGNAL(closeRequest()), SLOT(closeDatabaseTabFromSender()));
     connect(dbWidget, SIGNAL(databaseModified()), SLOT(updateTabName()));
     connect(dbWidget, SIGNAL(databaseSaved()), SLOT(updateTabName()));
@@ -394,8 +395,8 @@ void DatabaseTabWidget::exportToCsv()
         return;
     }
 
-    QString fileName = fileDialog()->getSaveFileName(
-        this, tr("Export database to CSV file"), QString(), tr("CSV file").append(" (*.csv)"), nullptr, nullptr, "csv");
+    const QString fileName = fileDialog()->getSaveFileName(
+        this, tr("Export database to CSV file"), QString(), tr("CSV file").append(" (*.csv)"), nullptr, nullptr);
     if (fileName.isEmpty()) {
         return;
     }
@@ -419,13 +420,8 @@ void DatabaseTabWidget::exportToHtml()
         return;
     }
 
-    QString fileName = fileDialog()->getSaveFileName(this,
-                                                     tr("Export database to HTML file"),
-                                                     QString(),
-                                                     tr("HTML file").append(" (*.html)"),
-                                                     nullptr,
-                                                     nullptr,
-                                                     "html");
+    const QString fileName = fileDialog()->getSaveFileName(
+        this, tr("Export database to HTML file"), QString(), tr("HTML file").append(" (*.html)"), nullptr, nullptr);
     if (fileName.isEmpty()) {
         return;
     }

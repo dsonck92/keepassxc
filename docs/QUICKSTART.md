@@ -62,7 +62,7 @@ To make sure that your data is valid when imported by another client, please _ge
 
 ### Sharing Credentials
 
-If you checked _Allow export_ in the Sharing settings you now are good to go to share some passwords with others. Sharing always is defined on a group. If you enable sharing on a group, every entry under this group or it's children is shared. If you enable sharing on the root node, **every password** inside your database gets shared!
+If you checked _Allow export_ in the Sharing settings you now are good to go to share some passwords with others. Sharing always is defined on a group. If you enable sharing on a group, every entry under this group or its children is shared. If you enable sharing on the root node, **every password** inside your database gets shared!
 
 1. Open the edit sheet on a group you want to share.
 1. Select the sharing section.
@@ -123,3 +123,15 @@ There is a simple overview of shared groups to keep track of your data.
 Sharing relies on the combination of file exports and imports as well as the synchronization mechanism provided by KeePassXC. Since the merge algorithm uses the history of entries to prevent data loss, this history must be enabled and have a sufficient size. Furthermore, the merge algorithm is location independend, therefore it does not matter if entries are moved outside of an import group. These entries will be updated none the less. Moving entries outside of export groups will prevent a further export of the entry, but it will not ensure that the already shared data will be removed from any client.
 
 KeeShare uses a custom certification mechanism to ensure that the source of the data is the expected one. This ensures that the data was exported by the signer but it is not possible to detect if someone replaced the data with an older version from a valid signer. To prevent this, the container could be placed at a location which is only writeable for valid signers.
+
+## Using Auto Open
+
+The Auto Open feature automatically loads and unlocks additional databases when you unlock your main database.
+In order to use this functionnality, do the following:
+
+1. Create a group called **AutoOpen** at the root of your main database.
+1. In this group, create a new entry for each database that should be opened automatically:
+    * Put the *password of the database* in the **Password** field
+    * Put the *path to the database's file* in the **URL** field* (it can be formatted either as **file://**, a **/path/to/the/file** form, or a relative file path.)
+    * If the extra database requires a keyfile to be unlocked, put the *path to the keyfile* in the **Username** field. The path options are the same as for the database's file in the URL field.
+1. The next time you unlock your database these databases will be opened and unlocked automatically.

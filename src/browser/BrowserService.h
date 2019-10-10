@@ -72,6 +72,8 @@ public:
     static const char KEEPASSXCBROWSER_OLD_NAME[];
     static const char ASSOCIATE_KEY_PREFIX[];
     static const char LEGACY_ASSOCIATE_KEY_PREFIX[];
+    static const char OPTION_SKIP_AUTO_SUBMIT[];
+    static const char OPTION_HIDE_ENTRY[];
 
 public slots:
     QJsonArray findMatchingEntries(const QString& id,
@@ -118,7 +120,8 @@ private:
                         const QString& url,
                         const QString& host,
                         const QString& submitHost,
-                        const QString& realm);
+                        const QString& realm,
+                        const bool httpAuth);
     QJsonObject prepareEntry(const Entry* entry);
     Access checkAccess(const Entry* entry, const QString& host, const QString& submitHost, const QString& realm);
     Group* getDefaultEntryGroup(const QSharedPointer<Database>& selectedDb = {});

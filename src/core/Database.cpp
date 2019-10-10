@@ -202,10 +202,16 @@ bool Database::save(QString* error, bool atomic, bool backup)
  */
 bool Database::save(const QString& filePath, QString* error, bool atomic, bool backup)
 {
-    Q_ASSERT(!m_data.isReadOnly);
-    if (m_data.isReadOnly) {
+    // Disallow saving to the same file if read-only
+    if (m_data.isReadOnly && filePath == m_data.filePath) {
+        Q_ASSERT_X(false, "Database::save", "Could not save, database file is read-only.");
+        if (error) {
+            *error = tr("Could not save, database file is read-only.");
+        }
         return false;
     }
+
+    auto& canonicalFilePath = QFileInfo::exists(filePath) ? QFileInfo(filePath).canonicalFilePath() : filePath;
 
     if (atomic) {
         QSaveFile saveFile(filePath);
@@ -216,7 +222,7 @@ bool Database::save(const QString& filePath, QString* error, bool atomic, bool b
             }
 
             if (backup) {
-                backupDatabase(filePath);
+                backupDatabase(canonicalFilePath);
             }
 
             if (saveFile.commit()) {
@@ -240,21 +246,21 @@ bool Database::save(const QString& filePath, QString* error, bool atomic, bool b
             tempFile.close(); // flush to disk
 
             if (backup) {
-                backupDatabase(filePath);
+                backupDatabase(canonicalFilePath);
             }
 
             // Delete the original db and move the temp file in place
-            QFile::remove(filePath);
+            QFile::remove(canonicalFilePath);
 
             // Note: call into the QFile rename instead of QTemporaryFile
             // due to an undocumented difference in how the function handles
             // errors. This prevents errors when saving across file systems.
-            if (tempFile.QFile::rename(filePath)) {
+            if (tempFile.QFile::rename(canonicalFilePath)) {
                 // successfully saved the database
                 tempFile.setAutoRemove(false);
                 setFilePath(filePath);
                 return true;
-            } else if (!backup || !restoreDatabase(filePath)) {
+            } else if (!backup || !restoreDatabase(canonicalFilePath)) {
                 // Failed to copy new database in place, and
                 // failed to restore from backup or backups disabled
                 tempFile.setAutoRemove(false);
@@ -741,10 +747,6 @@ bool Database::isModified() const
 
 void Database::markAsModified()
 {
-    if (isReadOnly()) {
-        return;
-    }
-
     m_modified = true;
     if (m_emitModified) {
         startModifiedTimer();
@@ -780,8 +782,6 @@ Database* Database::databaseByFilePath(const QString& filePath)
 
 void Database::startModifiedTimer()
 {
-    Q_ASSERT(!m_data.isReadOnly);
-
     if (!m_emitModified) {
         return;
     }
