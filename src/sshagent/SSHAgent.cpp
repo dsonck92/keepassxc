@@ -35,7 +35,10 @@ SSHAgent::SSHAgent(QObject* parent)
     : QObject(parent)
 {
 #ifndef Q_OS_WIN
-    m_socketPath = QProcessEnvironment::systemEnvironment().value("SSH_AUTH_SOCK");
+    m_socketPath = config()->get("SSHAuthSockOverride", "").toString();
+    if (m_socketPath.isEmpty()) {
+        m_socketPath = QProcessEnvironment::systemEnvironment().value("SSH_AUTH_SOCK");
+    }
 #else
     m_socketPath = "\\\\.\\pipe\\openssh-ssh-agent";
 #endif
@@ -182,6 +185,36 @@ bool SSHAgent::sendMessagePageant(const QByteArray& in, QByteArray& out)
 #endif
 
 /**
+ * Test if connection to SSH agent is working.
+ *
+ * @return true on success
+ */
+bool SSHAgent::testConnection()
+{
+    if (!isAgentRunning()) {
+        m_error = tr("No agent running, cannot test connection.");
+        return false;
+    }
+
+    QByteArray requestData;
+    BinaryStream request(&requestData);
+
+    request.write(SSH_AGENTC_REQUEST_IDENTITIES);
+
+    QByteArray responseData;
+    if (!sendMessage(requestData, responseData)) {
+        return false;
+    }
+
+    if (responseData.length() < 1 || static_cast<quint8>(responseData[0]) != SSH_AGENT_IDENTITIES_ANSWER) {
+        m_error = tr("Agent protocol error.");
+        return false;
+    }
+
+    return true;
+}
+
+/**
  * Add the identity to the SSH agent.
  *
  * @param key identity / key to add
@@ -308,73 +341,31 @@ void SSHAgent::databaseModeChanged()
     }
 
     for (Entry* e : widget->database()->rootGroup()->entriesRecursive()) {
-
         if (widget->database()->metadata()->recycleBinEnabled()
             && e->group() == widget->database()->metadata()->recycleBin()) {
             continue;
         }
 
-        if (!e->attachments()->hasKey("KeeAgent.settings")) {
-            continue;
-        }
-
         KeeAgentSettings settings;
-        settings.fromXml(e->attachments()->value("KeeAgent.settings"));
 
-        if (!settings.allowUseOfSshKey()) {
+        if (!settings.fromEntry(e)) {
             continue;
         }
 
-        QByteArray keyData;
-        QString fileName;
-        if (settings.selectedType() == "attachment") {
-            fileName = settings.attachmentName();
-            keyData = e->attachments()->value(fileName);
-        } else if (!settings.fileName().isEmpty()) {
-            QFile file(settings.fileName());
-            QFileInfo fileInfo(file);
-
-            fileName = fileInfo.fileName();
-
-            if (file.size() > 1024 * 1024) {
-                continue;
-            }
-
-            if (!file.open(QIODevice::ReadOnly)) {
-                continue;
-            }
-
-            keyData = file.readAll();
-        }
-
-        if (keyData.isEmpty()) {
+        if (!settings.allowUseOfSshKey() || !settings.addAtDatabaseOpen()) {
             continue;
         }
 
         OpenSSHKey key;
 
-        if (!key.parsePKCS1PEM(keyData)) {
+        if (!settings.toOpenSSHKey(e, key, true)) {
             continue;
         }
 
-        if (!key.openKey(e->password())) {
-            continue;
-        }
-
-        if (key.comment().isEmpty()) {
-            key.setComment(e->username());
-        }
-
-        if (key.comment().isEmpty()) {
-            key.setComment(fileName);
-        }
-
-        if (settings.addAtDatabaseOpen()) {
-            // Add key to agent; ignore errors if we have previously added the key
-            bool known_key = m_addedKeys.contains(key);
-            if (!addIdentity(key, settings) && !known_key) {
-                emit error(m_error);
-            }
+        // Add key to agent; ignore errors if we have previously added the key
+        bool known_key = m_addedKeys.contains(key);
+        if (!addIdentity(key, settings) && !known_key) {
+            emit error(m_error);
         }
     }
 }

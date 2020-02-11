@@ -27,9 +27,16 @@
 #include "core/Global.h"
 #include "core/Group.h"
 
+#include <QLocale>
+
 const QCommandLineOption Show::TotpOption = QCommandLineOption(QStringList() << "t"
                                                                              << "totp",
                                                                QObject::tr("Show the entry's current TOTP."));
+
+const QCommandLineOption Show::ProtectedAttributesOption =
+    QCommandLineOption(QStringList() << "s"
+                                     << "show-protected",
+                       QObject::tr("Show the protected attributes in clear text."));
 
 const QCommandLineOption Show::AttributesOption = QCommandLineOption(
     QStringList() << "a"
@@ -46,6 +53,7 @@ Show::Show()
     description = QObject::tr("Show an entry's information.");
     options.append(Show::TotpOption);
     options.append(Show::AttributesOption);
+    options.append(Show::ProtectedAttributesOption);
     positionalArguments.append({QString("entry"), QObject::tr("Name of the entry to show."), QString("")});
 }
 
@@ -57,6 +65,7 @@ int Show::executeWithDatabase(QSharedPointer<Database> database, QSharedPointer<
     const QStringList args = parser->positionalArguments();
     const QString& entryPath = args.at(1);
     bool showTotp = parser->isSet(Show::TotpOption);
+    bool showProtectedAttributes = parser->isSet(Show::ProtectedAttributesOption);
     QStringList attributes = parser->values(Show::AttributesOption);
 
     Entry* entry = database->rootGroup()->findEntryByPath(entryPath);
@@ -71,31 +80,40 @@ int Show::executeWithDatabase(QSharedPointer<Database> database, QSharedPointer<
     }
 
     // If no attributes specified, output the default attribute set.
-    bool showAttributeNames = attributes.isEmpty() && !showTotp;
-    if (attributes.isEmpty() && !showTotp) {
+    bool showDefaultAttributes = attributes.isEmpty() && !showTotp;
+    if (showDefaultAttributes) {
         attributes = EntryAttributes::DefaultAttributes;
     }
 
     // Iterate over the attributes and output them line-by-line.
-    bool sawUnknownAttribute = false;
-    for (const QString& attribute : asConst(attributes)) {
-        if (!entry->attributes()->contains(attribute)) {
-            sawUnknownAttribute = true;
-            errorTextStream << QObject::tr("ERROR: unknown attribute %1.").arg(attribute) << endl;
+    bool encounteredError = false;
+    for (const QString& attributeName : asConst(attributes)) {
+        QStringList attrs = Utils::findAttributes(*entry->attributes(), attributeName);
+        if (attrs.isEmpty()) {
+            encounteredError = true;
+            errorTextStream << QObject::tr("ERROR: unknown attribute %1.").arg(attributeName) << endl;
+            continue;
+        } else if (attrs.size() > 1) {
+            encounteredError = true;
+            errorTextStream << QObject::tr("ERROR: attribute %1 is ambiguous, it matches %2.")
+                                   .arg(attributeName, QLocale().createSeparatedList(attrs))
+                            << endl;
             continue;
         }
-        if (showAttributeNames) {
-            outputTextStream << attribute << ": ";
+        QString canonicalName = attrs[0];
+        if (showDefaultAttributes) {
+            outputTextStream << canonicalName << ": ";
         }
-        outputTextStream << entry->resolveMultiplePlaceholders(entry->attributes()->value(attribute)) << endl;
+        if (entry->attributes()->isProtected(canonicalName) && showDefaultAttributes && !showProtectedAttributes) {
+            outputTextStream << "PROTECTED" << endl;
+        } else {
+            outputTextStream << entry->resolveMultiplePlaceholders(entry->attributes()->value(canonicalName)) << endl;
+        }
     }
 
     if (showTotp) {
-        if (showAttributeNames) {
-            outputTextStream << "TOTP: ";
-        }
         outputTextStream << entry->totp() << endl;
     }
 
-    return sawUnknownAttribute ? EXIT_FAILURE : EXIT_SUCCESS;
+    return encounteredError ? EXIT_FAILURE : EXIT_SUCCESS;
 }

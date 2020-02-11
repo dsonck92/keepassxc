@@ -46,6 +46,9 @@ class QStringListModel;
 #include "sshagent/KeeAgentSettings.h"
 class OpenSSHKey;
 #endif
+#ifdef WITH_XC_BROWSER
+class EntryURLModel;
+#endif
 
 namespace Ui
 {
@@ -69,7 +72,7 @@ public:
     void
     loadEntry(Entry* entry, bool create, bool history, const QString& parentName, QSharedPointer<Database> database);
 
-    QString entryTitle() const;
+    Entry* currentEntry() const;
     void clear();
 
 signals:
@@ -90,7 +93,7 @@ private slots:
     void removeCurrentAttribute();
     void updateCurrentAttribute();
     void protectCurrentAttribute(bool state);
-    void revealCurrentAttribute();
+    void toggleCurrentAttributeVisibility();
     void updateAutoTypeEnabled();
     void openAutotypeHelp();
     void insertAutoTypeAssoc();
@@ -109,6 +112,7 @@ private slots:
     void toggleHideNotes(bool visible);
     void pickColor();
 #ifdef WITH_XC_SSHAGENT
+    void toKeeAgentSettings(KeeAgentSettings& settings) const;
     void updateSSHAgent();
     void updateSSHAgentAttachment();
     void updateSSHAgentAttachments();
@@ -120,7 +124,12 @@ private slots:
     void copyPublicKey();
 #endif
 #ifdef WITH_XC_BROWSER
+    void updateBrowserModified();
     void updateBrowser();
+    void insertURL();
+    void removeCurrentURL();
+    void editCurrentURL();
+    void updateCurrentURL();
 #endif
 
 private:
@@ -145,7 +154,6 @@ private:
     void updateEntryData(Entry* entry) const;
 #ifdef WITH_XC_SSHAGENT
     bool getOpenSSHKey(OpenSSHKey& key, bool decrypt = false);
-    void saveSSHAgentConfig();
 #endif
 
     void displayAttribute(QModelIndex index, bool showProtected);
@@ -175,7 +183,9 @@ private:
     QWidget* const m_sshAgentWidget;
 #endif
 #ifdef WITH_XC_BROWSER
+    bool m_browserSettingsChanged;
     QWidget* const m_browserWidget;
+    EntryURLModel* const m_additionalURLsDataModel;
 #endif
     EditWidgetProperties* const m_editWidgetProperties;
     QWidget* const m_historyWidget;

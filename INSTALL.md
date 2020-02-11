@@ -2,9 +2,7 @@ Build and Install KeePassXC
 =================
 
 This document will guide you through the steps to build and install KeePassXC from source.
-You can visit the online version of this document at the following link:
-
-https://github.com/keepassxreboot/keepassx/wiki/Install-Instruction-from-Source
+For more information, see also the [_Building KeePassXC_](https://github.com/keepassxreboot/keepassxc/wiki/Building-KeePassXC) page on the wiki.
 
 The [KeePassXC QuickStart](./docs/QUICKSTART.md) gets you started using KeePassXC on your
 Windows, Mac, or Linux computer using the pre-built binaries.
@@ -35,7 +33,7 @@ Prepare the Building Environment
 
 * [Building Environment on Linux](https://github.com/keepassxreboot/keepassxc/wiki/Set-up-Build-Environment-on-Linux)
 * [Building Environment on Windows](https://github.com/keepassxreboot/keepassxc/wiki/Set-up-Build-Environment-on-Windows)
-* [Building Environment on MacOS](https://github.com/keepassxreboot/keepassxc/wiki/Set-up-Build-Environment-on-OS-X)
+* [Building Environment on MacOS](https://github.com/keepassxreboot/keepassxc/wiki/Set-up-Build-Environment-on-macOS)
 
 Build Steps
 ===========
@@ -150,9 +148,15 @@ You can create a package to redistribute KeePassXC (zip, deb, rpm, dmg, etc..). 
 Testing
 =======
 
-You can perform test on the executable
+You can perform tests on the built executables with:
 ```
-make test
+make test ARGS+="--output-on-failure"
+```
+
+If you are not currently running on an X Server or Wayland, run the tests as follows:
+```
+make test ARGS+="-E test\(cli\|gui\) --output-on-failure"
+xvfb-run -e errors -a --server-args="-screen 0 1024x768x24" make test ARGS+="-R test\(cli\|gui\) --output-on-failure"
 ```
 
 Common parameters:

@@ -75,17 +75,6 @@ Group::~Group()
     cleanupParent();
 }
 
-Group* Group::createRecycleBin()
-{
-    Group* recycleBin = new Group();
-    recycleBin->setUuid(QUuid::createUuid());
-    recycleBin->setName(tr("Recycle Bin"));
-    recycleBin->setIcon(RecycleBinIconNumber);
-    recycleBin->setSearchingEnabled(Group::Disable);
-    recycleBin->setAutoTypeEnabled(Group::Disable);
-    return recycleBin;
-}
-
 template <class P, class V> inline bool Group::set(P& property, const V& value)
 {
     if (property != value) {
@@ -279,6 +268,11 @@ bool Group::isRecycled() const
 bool Group::isExpired() const
 {
     return m_data.timeInfo.expires() && m_data.timeInfo.expiryTime() < Clock::currentDateTimeUtc();
+}
+
+bool Group::isEmpty() const
+{
+    return !hasChildren() && m_entries.isEmpty();
 }
 
 CustomData* Group::customData()
@@ -591,13 +585,18 @@ QList<Entry*> Group::referencesRecursive(const Entry* entry) const
                                           [entry](const Entry* e) { return e->hasReferencesTo(entry->uuid()); });
 }
 
-Entry* Group::findEntryByUuid(const QUuid& uuid) const
+Entry* Group::findEntryByUuid(const QUuid& uuid, bool recursive) const
 {
     if (uuid.isNull()) {
         return nullptr;
     }
 
-    for (Entry* entry : entriesRecursive(false)) {
+    auto entries = m_entries;
+    if (recursive) {
+        entries = entriesRecursive(false);
+    }
+
+    for (auto entry : entries) {
         if (entry->uuid() == uuid) {
             return entry;
         }

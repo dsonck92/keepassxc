@@ -29,6 +29,8 @@ set(cli_SOURCES
         Export.cpp
         Generate.cpp
         Help.cpp
+        Import.cpp
+        Info.cpp
         List.cpp
         Locate.cpp
         Merge.cpp
@@ -104,6 +106,8 @@ if(APPLE AND WITH_APP_BUNDLE)
                                 "@executable_path/../Frameworks/libyubikey.0.dylib"
                             -change /usr/local/opt/ykpers/lib/libykpers-1.1.dylib
                                 "@executable_path/../Frameworks/libykpers-1.1.dylib"
+                            -change /usr/local/opt/quazip/lib/libquazip.1.dylib
+                                "@executable_path/../Frameworks/libquazip.1.dylib"
                        keepassxc-cli
                        COMMENT "Changing linking of keepassxc-cli")
 
@@ -116,5 +120,5 @@ if(APPLE AND WITH_APP_BUNDLE)
 endif()
 
 if(APPLE OR UNIX)
-    install(FILES keepassxc-cli.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1/)
+    install(FILES ../../share/docs/man/keepassxc-cli.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1/)
 endif()

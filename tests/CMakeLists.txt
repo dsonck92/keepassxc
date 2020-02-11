@@ -87,17 +87,7 @@ macro(add_unit_test)
     endif()
 endmacro(add_unit_test)
 
-set(TEST_LIBRARIES
-        keepassx_core
-        ${keepasshttp_LIB}
-        ${autotype_LIB}
-        Qt5::Core
-        Qt5::Concurrent
-        Qt5::Widgets
-        Qt5::Test
-        ${GCRYPT_LIBRARIES}
-        ${GPGERROR_LIBRARIES}
-        ${ZLIB_LIBRARIES})
+set(TEST_LIBRARIES keepassx_core Qt5::Test)
 
 set(testsupport_SOURCES
         modeltest.cpp
@@ -108,17 +98,13 @@ set(testsupport_SOURCES
 add_library(testsupport STATIC ${testsupport_SOURCES})
 target_link_libraries(testsupport Qt5::Core Qt5::Concurrent Qt5::Widgets Qt5::Test)
 
-if(YUBIKEY_FOUND)
-    set(TEST_LIBRARIES ${TEST_LIBRARIES} ${YUBIKEY_LIBRARIES})
-endif()
-
 add_unit_test(NAME testgroup SOURCES TestGroup.cpp
         LIBS testsupport ${TEST_LIBRARIES})
 
 add_unit_test(NAME testkdbx2 SOURCES TestKdbx2.cpp
         LIBS ${TEST_LIBRARIES})
 
-add_unit_test(NAME testkdbx3 SOURCES TestKeePass2Format.cpp FailDevice.cpp TestKdbx3.cpp
+add_unit_test(NAME testkdbx3 SOURCES TestKeePass2Format.cpp FailDevice.cpp mock/MockChallengeResponseKey.cpp TestKdbx3.cpp
         LIBS testsupport ${TEST_LIBRARIES})
 
 add_unit_test(NAME testkdbx4 SOURCES TestKeePass2Format.cpp FailDevice.cpp mock/MockChallengeResponseKey.cpp TestKdbx4.cpp
@@ -178,7 +164,7 @@ endif()
 
 if(WITH_XC_CRYPTO_SSH)
     add_unit_test(NAME testopensshkey SOURCES TestOpenSSHKey.cpp
-	        LIBS ${TEST_LIBRARIES})
+            LIBS ${TEST_LIBRARIES})
 endif()
 
 add_unit_test(NAME testentry SOURCES TestEntry.cpp
@@ -188,6 +174,9 @@ add_unit_test(NAME testmerge SOURCES TestMerge.cpp
         LIBS testsupport ${TEST_LIBRARIES})
 
 add_unit_test(NAME testpasswordgenerator SOURCES TestPasswordGenerator.cpp
+        LIBS ${TEST_LIBRARIES})
+
+add_unit_test(NAME testpasswordhealth SOURCES TestPasswordHealth.cpp
         LIBS ${TEST_LIBRARIES})
 
 add_unit_test(NAME testpassphrasegenerator SOURCES TestPassphraseGenerator.cpp
@@ -206,7 +195,7 @@ add_unit_test(NAME testcsvparser SOURCES TestCsvParser.cpp
         LIBS ${TEST_LIBRARIES})
 
 add_unit_test(NAME testrandomgenerator SOURCES TestRandomGenerator.cpp
-	LIBS testsupport ${TEST_LIBRARIES})
+    LIBS testsupport ${TEST_LIBRARIES})
 
 add_unit_test(NAME testentrysearcher SOURCES TestEntrySearcher.cpp
         LIBS ${TEST_LIBRARIES})
@@ -220,11 +209,11 @@ add_unit_test(NAME testykchallengeresponsekey
 
 if(WITH_XC_KEESHARE)
     add_unit_test(NAME testsharing SOURCES TestSharing.cpp
-	    LIBS testsupport ${TEST_LIBRARIES})
+        LIBS testsupport ${TEST_LIBRARIES})
 endif()
 
 add_unit_test(NAME testdatabase SOURCES TestDatabase.cpp
-        LIBS ${TEST_LIBRARIES})
+        LIBS testsupport ${TEST_LIBRARIES})
 
 add_unit_test(NAME testtools SOURCES TestTools.cpp
         LIBS ${TEST_LIBRARIES})

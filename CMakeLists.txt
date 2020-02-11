@@ -27,15 +27,9 @@ string(TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_LOWER)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-# Use the Compiler Cache (ccache) if it is installed
-# (install with: sudo apt get ccache)
-find_program (CCACHE_FOUND ccache)
-if (CCACHE_FOUND)
-    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
-endif (CCACHE_FOUND)
-
 # Support Visual Studio Code
 include(CMakeToolsHelpers OPTIONAL)
+include(FeatureSummary)
 
 include(CheckCCompilerFlag)
 include(CheckCXXCompilerFlag)
@@ -47,6 +41,7 @@ option(WITH_DEV_BUILD "Use only for development. Disables/warns about deprecated
 option(WITH_ASAN "Enable address sanitizer checks (Linux / macOS only)" OFF)
 option(WITH_COVERAGE "Use to build with coverage tests (GCC only)." OFF)
 option(WITH_APP_BUNDLE "Enable Application Bundle for macOS" ON)
+option(WITH_CCACHE "Use ccache for build" OFF)
 
 set(WITH_XC_ALL OFF CACHE BOOL "Build in all available plugins")
 
@@ -62,6 +57,17 @@ if(UNIX AND NOT APPLE)
 endif()
 if(APPLE)
     option(WITH_XC_TOUCHID "Include TouchID support for macOS." OFF)
+endif()
+
+if(WITH_CCACHE)
+    # Use the Compiler Cache (ccache) program
+    # (install with: sudo apt get ccache)
+    find_program (CCACHE_FOUND ccache)
+    if(CCACHE_FOUND)
+        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+    else()
+        message(FATAL_ERROR "ccache requested but cannot be found.")
+    endif()
 endif()
 
 if(WITH_XC_ALL)
@@ -94,7 +100,7 @@ endif()
 
 set(KEEPASSXC_VERSION_MAJOR "2")
 set(KEEPASSXC_VERSION_MINOR "5")
-set(KEEPASSXC_VERSION_PATCH "0")
+set(KEEPASSXC_VERSION_PATCH "3")
 set(KEEPASSXC_VERSION "${KEEPASSXC_VERSION_MAJOR}.${KEEPASSXC_VERSION_MINOR}.${KEEPASSXC_VERSION_PATCH}")
 set(OVERRIDE_VERSION "" CACHE STRING "Override the KeePassXC Version for Snapshot builds")
 
@@ -299,6 +305,9 @@ endif()
 
 if(WITH_DEV_BUILD)
     add_definitions(-DQT_DEPRECATED_WARNINGS -DGCRYPT_NO_DEPRECATED)
+else()
+    add_definitions(-DQT_NO_DEPRECATED_WARNINGS)
+    add_gcc_compiler_cxxflags("-Wno-deprecated-declarations")
 endif()
 
 if(MINGW)
@@ -438,6 +447,14 @@ if(UNIX)
     int main() { prctl(PR_SET_DUMPABLE, 0); return 0; }"
             HAVE_PR_SET_DUMPABLE)
 
+    check_cxx_source_compiles("#include <malloc.h>
+    int main() { return 0; }"
+            HAVE_MALLOC_H)
+
+    check_cxx_source_compiles("#include <malloc.h>
+    int main() { malloc_usable_size(NULL, 0); return 0; }"
+            HAVE_MALLOC_USABLE_SIZE)
+
     check_cxx_source_compiles("#include <sys/resource.h>
     int main() {
       struct rlimit limit;
@@ -456,8 +473,6 @@ if(UNIX)
 endif()
 
 include_directories(SYSTEM ${GCRYPT_INCLUDE_DIR} ${ZLIB_INCLUDE_DIR})
-
-include(FeatureSummary)
 
 add_subdirectory(src)
 add_subdirectory(share)

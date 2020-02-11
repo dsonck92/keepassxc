@@ -80,8 +80,6 @@ public:
     Group();
     ~Group();
 
-    static Group* createRecycleBin();
-
     const QUuid& uuid() const;
     const QString uuidToHex() const;
     QString name() const;
@@ -103,6 +101,7 @@ public:
     Entry* lastTopVisibleEntry() const;
     bool isExpired() const;
     bool isRecycled() const;
+    bool isEmpty() const;
     CustomData* customData();
     const CustomData* customData() const;
 
@@ -115,7 +114,7 @@ public:
     static const QString RootAutoTypeSequence;
 
     Group* findChildByName(const QString& name);
-    Entry* findEntryByUuid(const QUuid& uuid) const;
+    Entry* findEntryByUuid(const QUuid& uuid, bool recursive = true) const;
     Entry* findEntryByPath(const QString& entryPath);
     Entry* findEntryBySearchTerm(const QString& term, EntryReferenceType referenceType);
     Group* findGroupByUuid(const QUuid& uuid);

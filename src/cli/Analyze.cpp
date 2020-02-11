@@ -55,7 +55,7 @@ int Analyze::executeWithDatabase(QSharedPointer<Database> database, QSharedPoint
         return EXIT_FAILURE;
     }
 
-    outputTextStream << QObject::tr("Evaluating database entries against HIBP file, this will take a while...");
+    outputTextStream << QObject::tr("Evaluating database entries against HIBP file, this will take a while...") << endl;
 
     QList<QPair<const Entry*, int>> findings;
     QString error;
@@ -78,5 +78,5 @@ void Analyze::printHibpFinding(const Entry* entry, int count, QTextStream& out)
         path.prepend("/").prepend(g->name());
     }
 
-    out << QObject::tr("Password for '%1' has been leaked %2 times!").arg(path).arg(count) << endl;
+    out << QObject::tr("Password for '%1' has been leaked %2 time(s)!", "", count).arg(path).arg(count) << endl;
 }

@@ -149,7 +149,7 @@ void enterInteractiveMode(const QStringList& arguments)
         prompt += "> ";
         command = reader->readLine(prompt);
         if (reader->isFinished()) {
-            return;
+            break;
         }
 
         QStringList args = Utils::splitCommandString(command);
@@ -162,12 +162,16 @@ void enterInteractiveMode(const QStringList& arguments)
             errorTextStream << QObject::tr("Unknown command %1").arg(args[0]) << "\n";
             continue;
         } else if (cmd->name == "quit" || cmd->name == "exit") {
-            return;
+            break;
         }
 
         cmd->currentDatabase = currentDatabase;
         cmd->execute(args);
         currentDatabase = cmd->currentDatabase;
+    }
+
+    if (currentDatabase) {
+        currentDatabase->releaseData();
     }
 }
 
@@ -185,6 +189,7 @@ int main(int argc, char** argv)
     Commands::setupCommands(false);
 
     TextStream out(stdout);
+    TextStream err(stderr);
     QStringList arguments;
     for (int i = 0; i < argc; ++i) {
         arguments << QString(argv[i]);
@@ -219,6 +224,7 @@ int main(int argc, char** argv)
             out << debugInfo << endl;
             return EXIT_SUCCESS;
         }
+        // showHelp exits the application immediately.
         parser.showHelp();
     }
 
@@ -230,10 +236,9 @@ int main(int argc, char** argv)
 
     auto command = Commands::getCommand(commandName);
     if (!command) {
-        qCritical("Invalid command %s.", qPrintable(commandName));
-        // showHelp exits the application immediately, so we need to set the
-        // exit code here.
-        parser.showHelp(EXIT_FAILURE);
+        err << QObject::tr("Invalid command %1.").arg(commandName) << endl;
+        err << parser.helpText();
+        return EXIT_FAILURE;
     }
 
     // Removing the first argument (keepassxc).

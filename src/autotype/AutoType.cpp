@@ -37,6 +37,10 @@
 #include "core/Tools.h"
 #include "gui/MessageBox.h"
 
+#ifdef Q_OS_MAC
+#include "gui/macutils/MacUtils.h"
+#endif
+
 AutoType* AutoType::m_instance = nullptr;
 
 AutoType::AutoType(QObject* parent, bool test)
@@ -214,6 +218,16 @@ void AutoType::executeAutoTypeActions(const Entry* entry, QWidget* hideWindow, c
 
     if (hideWindow) {
 #if defined(Q_OS_MACOS)
+        // Check for accessibility permission
+        if (!macUtils()->enableAccessibility()) {
+            MessageBox::information(nullptr,
+                                    tr("Permission Required"),
+                                    tr("KeePassXC requires the Accessibility permission in order to perform entry "
+                                       "level Auto-Type. If you already granted permission, you may have to restart "
+                                       "KeePassXC."));
+            return;
+        }
+        macUtils()->raiseLastActiveWindow();
         m_plugin->hideOwnWindow();
 #else
         hideWindow->showMinimized();
@@ -574,12 +588,12 @@ QList<AutoTypeAction*> AutoType::createActionFromTemplate(const QString& tmpl, c
 QList<QString> AutoType::autoTypeSequences(const Entry* entry, const QString& windowTitle)
 {
     QList<QString> sequenceList;
+    const Group* group = entry->group();
 
-    if (!entry->autoTypeEnabled()) {
+    if (!group || !entry->autoTypeEnabled()) {
         return sequenceList;
     }
 
-    const Group* group = entry->group();
     do {
         if (group->autoTypeEnabled() == Group::Disable) {
             return sequenceList;

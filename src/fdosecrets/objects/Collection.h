@@ -21,6 +21,7 @@
 #include "DBusObject.h"
 
 #include "adaptors/CollectionAdaptor.h"
+#include "core/EntrySearcher.h"
 
 #include <QPointer>
 #include <QSet>
@@ -70,8 +71,15 @@ namespace FdoSecrets
         void aliasAdded(const QString& alias);
         void aliasRemoved(const QString& alias);
 
+        void doneUnlockCollection(bool accepted);
+
     public:
         DBusReturn<void> setProperties(const QVariantMap& properties);
+
+        bool isValid() const
+        {
+            return backend();
+        }
 
         DBusReturn<void> removeAlias(QString alias);
         DBusReturn<void> addAlias(QString alias);
@@ -90,6 +98,8 @@ namespace FdoSecrets
         bool inRecycleBin(Group* group) const;
         bool inRecycleBin(Entry* entry) const;
 
+        static EntrySearcher::SearchTerm attributeToTerm(const QString& key, const QString& value);
+
     public slots:
         // expose some methods for Prmopt to use
         void doLock();
@@ -103,6 +113,7 @@ namespace FdoSecrets
     private slots:
         void onDatabaseLockChanged();
         void onDatabaseExposedGroupChanged();
+        // force reload info from backend, potentially delete self
         void reloadBackend();
 
     private:

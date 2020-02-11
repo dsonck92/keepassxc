@@ -208,12 +208,12 @@ const QUuid& Entry::iconUuid() const
     return m_data.customIcon;
 }
 
-QColor Entry::foregroundColor() const
+QString Entry::foregroundColor() const
 {
     return m_data.foregroundColor;
 }
 
-QColor Entry::backgroundColor() const
+QString Entry::backgroundColor() const
 {
     return m_data.backgroundColor;
 }
@@ -442,16 +442,16 @@ QString Entry::totp() const
 void Entry::setTotp(QSharedPointer<Totp::Settings> settings)
 {
     beginUpdate();
+    m_attributes->remove(Totp::ATTRIBUTE_OTP);
+    m_attributes->remove(Totp::ATTRIBUTE_SEED);
+    m_attributes->remove(Totp::ATTRIBUTE_SETTINGS);
+
     if (settings->key.isEmpty()) {
         m_data.totpSettings.reset();
-        m_attributes->remove(Totp::ATTRIBUTE_OTP);
-        m_attributes->remove(Totp::ATTRIBUTE_SEED);
-        m_attributes->remove(Totp::ATTRIBUTE_SETTINGS);
     } else {
         m_data.totpSettings = std::move(settings);
-
         auto text = Totp::writeSettings(m_data.totpSettings, title(), username());
-        if (m_attributes->hasKey(Totp::ATTRIBUTE_OTP)) {
+        if (m_data.totpSettings->format != Totp::StorageFormat::LEGACY) {
             m_attributes->set(Totp::ATTRIBUTE_OTP, text, true);
         } else {
             m_attributes->set(Totp::ATTRIBUTE_SEED, m_data.totpSettings->key, true);
@@ -508,14 +508,14 @@ void Entry::setIcon(const QUuid& uuid)
     }
 }
 
-void Entry::setForegroundColor(const QColor& color)
+void Entry::setForegroundColor(const QString& colorStr)
 {
-    set(m_data.foregroundColor, color);
+    set(m_data.foregroundColor, colorStr);
 }
 
-void Entry::setBackgroundColor(const QColor& color)
+void Entry::setBackgroundColor(const QString& colorStr)
 {
-    set(m_data.backgroundColor, color);
+    set(m_data.backgroundColor, colorStr);
 }
 
 void Entry::setOverrideUrl(const QString& url)
@@ -762,7 +762,8 @@ Entry* Entry::clone(CloneFlags flags) const
     entry->m_autoTypeAssociations->copyDataFrom(m_autoTypeAssociations);
     if (flags & CloneIncludeHistory) {
         for (Entry* historyItem : m_history) {
-            Entry* historyItemClone = historyItem->clone(flags & ~CloneIncludeHistory & ~CloneNewUuid & ~CloneResetTimeInfo);
+            Entry* historyItemClone =
+                historyItem->clone(flags & ~CloneIncludeHistory & ~CloneNewUuid & ~CloneResetTimeInfo);
             historyItemClone->setUpdateTimeinfo(false);
             historyItemClone->setUuid(entry->uuid());
             historyItemClone->setUpdateTimeinfo(true);
@@ -778,8 +779,9 @@ Entry* Entry::clone(CloneFlags flags) const
         entry->m_data.timeInfo.setLocationChanged(now);
     }
 
-    if (flags & CloneRenameTitle)
+    if (flags & CloneRenameTitle) {
         entry->setTitle(tr("%1 - Clone").arg(entry->title()));
+    }
 
     entry->setUpdateTimeinfo(true);
 
@@ -1074,8 +1076,9 @@ QString Entry::resolvePlaceholder(const QString& placeholder) const
 
 QString Entry::resolveUrlPlaceholder(const QString& str, Entry::PlaceholderType placeholderType) const
 {
-    if (str.isEmpty())
+    if (str.isEmpty()) {
         return QString();
+    }
 
     const QUrl qurl(str);
     switch (placeholderType) {

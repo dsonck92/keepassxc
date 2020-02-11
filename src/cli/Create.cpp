@@ -30,12 +30,19 @@
 #include "keys/CompositeKey.h"
 #include "keys/Key.h"
 
+const QCommandLineOption Create::DecryptionTimeOption =
+    QCommandLineOption(QStringList() << "t"
+                                     << "decryption-time",
+                       QObject::tr("Target decryption time in MS for the database."),
+                       QObject::tr("time"));
+
 Create::Create()
 {
-    name = QString("create");
+    name = QString("db-create");
     description = QObject::tr("Create a new database.");
     positionalArguments.append({QString("database"), QObject::tr("Path of the database."), QString("")});
     options.append(Command::KeyFileOption);
+    options.append(Create::DecryptionTimeOption);
 }
 
 /**
@@ -53,13 +60,15 @@ Create::Create()
  */
 int Create::execute(const QStringList& arguments)
 {
-    QTextStream out(Utils::STDOUT, QIODevice::WriteOnly);
-    QTextStream err(Utils::STDERR, QIODevice::WriteOnly);
-
     QSharedPointer<QCommandLineParser> parser = getCommandLineParser(arguments);
     if (parser.isNull()) {
         return EXIT_FAILURE;
     }
+
+    bool quiet = parser->isSet(Command::QuietOption);
+
+    QTextStream out(quiet ? Utils::DEVNULL : Utils::STDOUT, QIODevice::WriteOnly);
+    QTextStream err(Utils::STDERR, QIODevice::WriteOnly);
 
     const QStringList args = parser->positionalArguments();
 
@@ -69,9 +78,26 @@ int Create::execute(const QStringList& arguments)
         return EXIT_FAILURE;
     }
 
+    // Validate the decryption time before asking for a password.
+    QString decryptionTimeValue = parser->value(Create::DecryptionTimeOption);
+    int decryptionTime = 0;
+    if (decryptionTimeValue.length() != 0) {
+        decryptionTime = decryptionTimeValue.toInt();
+        if (decryptionTime <= 0) {
+            err << QObject::tr("Invalid decryption time %1.").arg(decryptionTimeValue) << endl;
+            return EXIT_FAILURE;
+        }
+        if (decryptionTime < Kdf::MIN_ENCRYPTION_TIME || decryptionTime > Kdf::MAX_ENCRYPTION_TIME) {
+            err << QObject::tr("Target decryption time must be between %1 and %2.")
+                       .arg(QString::number(Kdf::MIN_ENCRYPTION_TIME), QString::number(Kdf::MAX_ENCRYPTION_TIME))
+                << endl;
+            return EXIT_FAILURE;
+        }
+    }
+
     auto key = QSharedPointer<CompositeKey>::create();
 
-    auto password = getPasswordFromStdin();
+    auto password = Utils::getPasswordFromStdin();
     if (!password.isNull()) {
         key->addKey(password);
     }
@@ -96,8 +122,25 @@ int Create::execute(const QStringList& arguments)
     QSharedPointer<Database> db(new Database);
     db->setKey(key);
 
+    if (decryptionTime != 0) {
+        auto kdf = db->kdf();
+        Q_ASSERT(kdf);
+
+        out << QObject::tr("Benchmarking key derivation function for %1ms delay.").arg(decryptionTimeValue) << endl;
+        int rounds = kdf->benchmark(decryptionTime);
+        out << QObject::tr("Setting %1 rounds for key derivation function.").arg(QString::number(rounds)) << endl;
+        kdf->setRounds(rounds);
+
+        bool ok = db->changeKdf(kdf);
+
+        if (!ok) {
+            err << QObject::tr("Error while setting database key derivation settings.") << endl;
+            return EXIT_FAILURE;
+        }
+    }
+
     QString errorMessage;
-    if (!db->save(databaseFilename, &errorMessage, true, false)) {
+    if (!db->saveAs(databaseFilename, &errorMessage, true, false)) {
         err << QObject::tr("Failed to save the database: %1.").arg(errorMessage) << endl;
         return EXIT_FAILURE;
     }
@@ -105,28 +148,6 @@ int Create::execute(const QStringList& arguments)
     out << QObject::tr("Successfully created new database.") << endl;
     currentDatabase = db;
     return EXIT_SUCCESS;
-}
-
-/**
- * Read optional password from stdin.
- *
- * @return Pointer to the PasswordKey or null if passwordkey is skipped
- *         by user
- */
-QSharedPointer<PasswordKey> Create::getPasswordFromStdin()
-{
-    QSharedPointer<PasswordKey> passwordKey;
-    QTextStream out(Utils::STDOUT, QIODevice::WriteOnly);
-
-    out << QObject::tr("Insert password to encrypt database (Press enter to leave blank): ");
-    out.flush();
-    QString password = Utils::getPassword();
-
-    if (!password.isEmpty()) {
-        passwordKey = QSharedPointer<PasswordKey>(new PasswordKey(password));
-    }
-
-    return passwordKey;
 }
 
 /**

@@ -30,16 +30,10 @@ LineEdit::LineEdit(QWidget* parent)
 {
     m_clearButton->setObjectName("clearButton");
 
-    QIcon icon;
     QString iconNameDirected =
         QString("edit-clear-locationbar-").append((layoutDirection() == Qt::LeftToRight) ? "rtl" : "ltr");
-    icon = QIcon::fromTheme(iconNameDirected);
-    if (icon.isNull()) {
-        icon = QIcon::fromTheme("edit-clear");
-        if (icon.isNull()) {
-            icon = filePath()->icon("actions", iconNameDirected);
-        }
-    }
+
+    const auto icon = filePath()->icon("actions", iconNameDirected);
 
     m_clearButton->setIcon(icon);
     m_clearButton->setCursor(Qt::ArrowCursor);

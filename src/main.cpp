@@ -50,20 +50,15 @@ int main(int argc, char** argv)
 
 #if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-#ifdef Q_OS_LINUX
     QGuiApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 #endif
-#endif
-#ifdef Q_OS_LINUX
-    if (qgetenv("XDG_SESSION_TYPE") == QByteArrayLiteral("wayland") && qgetenv("QT_QPA_PLATFORM").isEmpty()) {
-        qWarning() << "Warning: disregarding XDG_SESSION_TYPE=wayland";
-        qWarning() << "To use wayland anyway, please set QT_QPA_PLATFORM=wayland";
-        qunsetenv("XDG_SESSION_TYPE");
-    }
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 7, 0)
+    QGuiApplication::setDesktopFileName("org.keepassxc.KeePassXC.desktop");
 #endif
 
     Application app(argc, argv);
-    Application::setApplicationName("keepassxc");
+    Application::setApplicationName("KeePassXC");
     Application::setApplicationVersion(KEEPASSXC_VERSION);
     // don't set organizationName as that changes the return value of
     // QStandardPaths::writableLocation(QDesktopServices::DataLocation)

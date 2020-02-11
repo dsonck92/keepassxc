@@ -63,6 +63,8 @@ DatabaseTabWidget::DatabaseTabWidget(QWidget* parent)
     connect(autoType(), SIGNAL(globalAutoTypeTriggered()), SLOT(performGlobalAutoType()));
     connect(autoType(), SIGNAL(autotypePerformed()), SLOT(relockPendingDatabase()));
     connect(autoType(), SIGNAL(autotypeRejected()), SLOT(relockPendingDatabase()));
+    connect(m_databaseOpenDialog.data(), &DatabaseOpenDialog::dialogFinished,
+            this, &DatabaseTabWidget::databaseUnlockDialogFinished);
     // clang-format on
 
 #ifdef Q_OS_MACOS
@@ -156,6 +158,7 @@ void DatabaseTabWidget::addDatabaseTab(const QString& filePath,
 {
     QFileInfo fileInfo(filePath);
     QString canonicalFilePath = fileInfo.canonicalFilePath();
+
     if (canonicalFilePath.isEmpty()) {
         emit messageGlobal(tr("Failed to open %1. It either does not exist or is not accessible.").arg(filePath),
                            MessageWidget::Error);
@@ -165,7 +168,8 @@ void DatabaseTabWidget::addDatabaseTab(const QString& filePath,
     for (int i = 0, c = count(); i < c; ++i) {
         auto* dbWidget = databaseWidgetFromIndex(i);
         Q_ASSERT(dbWidget);
-        if (dbWidget && dbWidget->database()->canonicalFilePath() == canonicalFilePath) {
+        if (dbWidget
+            && dbWidget->database()->canonicalFilePath().compare(canonicalFilePath, FILE_CASE_SENSITIVE) == 0) {
             dbWidget->performUnlockDatabase(password, keyfile);
             if (!inBackground) {
                 // switch to existing tab if file is already open
@@ -200,11 +204,14 @@ void DatabaseTabWidget::addDatabaseTab(DatabaseWidget* dbWidget, bool inBackgrou
         setCurrentIndex(index);
     }
 
-    connect(dbWidget, SIGNAL(databaseFilePathChanged(QString, QString)), SLOT(updateTabName()));
     connect(dbWidget,
             SIGNAL(requestOpenDatabase(QString, bool, QString, QString)),
             SLOT(addDatabaseTab(QString, bool, QString, QString)));
+    connect(dbWidget, SIGNAL(databaseFilePathChanged(QString, QString)), SLOT(updateTabName()));
     connect(dbWidget, SIGNAL(closeRequest()), SLOT(closeDatabaseTabFromSender()));
+    connect(dbWidget,
+            SIGNAL(databaseReplaced(const QSharedPointer<Database>&, const QSharedPointer<Database>&)),
+            SLOT(updateTabName()));
     connect(dbWidget, SIGNAL(databaseModified()), SLOT(updateTabName()));
     connect(dbWidget, SIGNAL(databaseSaved()), SLOT(updateTabName()));
     connect(dbWidget, SIGNAL(databaseUnlocked()), SLOT(updateTabName()));
@@ -448,6 +455,11 @@ bool DatabaseTabWidget::warnOnExport()
 void DatabaseTabWidget::changeMasterKey()
 {
     currentDatabaseWidget()->switchToMasterKeyChange();
+}
+
+void DatabaseTabWidget::changeReports()
+{
+    currentDatabaseWidget()->switchToReports();
 }
 
 void DatabaseTabWidget::changeDatabaseSettings()

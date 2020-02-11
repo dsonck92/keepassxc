@@ -48,6 +48,7 @@ set(keepassx_SOURCES
         core/Merger.cpp
         core/Metadata.cpp
         core/PasswordGenerator.cpp
+        core/PasswordHealth.cpp
         core/PassphraseGenerator.cpp
         core/SignalMultiplexer.cpp
         core/ScreenLockListener.cpp
@@ -121,6 +122,7 @@ set(keepassx_SOURCES
         gui/TotpDialog.cpp
         gui/TotpExportSettingsDialog.cpp
         gui/DatabaseOpenDialog.cpp
+        gui/URLEdit.cpp
         gui/WelcomeWidget.cpp
         gui/csvImport/CsvImportWidget.cpp
         gui/csvImport/CsvImportWizard.cpp
@@ -148,6 +150,12 @@ set(keepassx_SOURCES
         gui/dbsettings/DatabaseSettingsWidgetMetaDataSimple.cpp
         gui/dbsettings/DatabaseSettingsWidgetEncryption.cpp
         gui/dbsettings/DatabaseSettingsWidgetMasterKey.cpp
+        gui/reports/ReportsWidget.cpp
+        gui/reports/ReportsDialog.cpp
+        gui/reports/ReportsWidgetHealthcheck.cpp
+        gui/reports/ReportsPageHealthcheck.cpp
+        gui/reports/ReportsWidgetStatistics.cpp
+        gui/reports/ReportsPageStatistics.cpp
         gui/settings/SettingsWidget.cpp
         gui/widgets/ElidedLabel.cpp
         gui/widgets/PopupHelpWidget.cpp
@@ -216,6 +224,7 @@ add_subdirectory(proxy)
 if(WITH_XC_BROWSER)
     set(keepassxcbrowser_LIB keepassxcbrowser)
     set(keepassx_SOURCES ${keepassx_SOURCES} gui/dbsettings/DatabaseSettingsWidgetBrowser.cpp)
+    set(keepassx_SOURCES ${keepassx_SOURCES} gui/entry/EntryURLModel.cpp)
 endif()
 
 add_subdirectory(autotype)
@@ -385,6 +394,10 @@ endif()
 install(TARGETS ${PROGNAME}
         BUNDLE DESTINATION . COMPONENT Runtime
         RUNTIME DESTINATION ${BIN_INSTALL_DIR} COMPONENT Runtime)
+
+if(APPLE OR UNIX)
+    install(FILES ../share/docs/man/keepassxc.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1/)
+endif()
 
 if(MINGW)
     if(${CMAKE_SIZEOF_VOID_P} EQUAL "8")

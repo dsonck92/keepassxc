@@ -78,6 +78,7 @@ public slots:
     void relockPendingDatabase();
 
     void changeMasterKey();
+    void changeReports();
     void changeDatabaseSettings();
     void performGlobalAutoType();
 
@@ -90,6 +91,7 @@ signals:
     void tabNameChanged();
     void messageGlobal(const QString&, MessageWidget::MessageType type);
     void messageDismissGlobal();
+    void databaseUnlockDialogFinished(bool accepted, DatabaseWidget* dbWidget);
 
 private slots:
     void toggleTabbar();

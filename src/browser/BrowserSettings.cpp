@@ -19,6 +19,7 @@
 
 #include "BrowserSettings.h"
 #include "core/Config.h"
+#include "core/PasswordHealth.h"
 
 BrowserSettings* BrowserSettings::m_instance(nullptr);
 
@@ -280,6 +281,17 @@ void BrowserSettings::setTorBrowserSupport(bool enabled)
         HostInstaller::SupportedBrowsers::TOR_BROWSER, enabled, supportBrowserProxy(), customProxyLocation());
 }
 
+bool BrowserSettings::edgeSupport()
+{
+    return m_hostInstaller.checkIfInstalled(HostInstaller::SupportedBrowsers::EDGE);
+}
+
+void BrowserSettings::setEdgeSupport(bool enabled)
+{
+    m_hostInstaller.installBrowser(
+        HostInstaller::SupportedBrowsers::EDGE, enabled, supportBrowserProxy(), customProxyLocation());
+}
+
 bool BrowserSettings::passwordUseNumbers()
 {
     return config()->get("generator/Numbers", PasswordGenerator::DefaultNumbers).toBool();
@@ -530,7 +542,7 @@ QJsonObject BrowserSettings::generatePassword()
         m_passwordGenerator.setCharClasses(passwordCharClasses());
         m_passwordGenerator.setFlags(passwordGeneratorFlags());
         const QString pw = m_passwordGenerator.generatePassword();
-        password["entropy"] = m_passwordGenerator.estimateEntropy(pw);
+        password["entropy"] = PasswordHealth(pw).entropy();
         password["password"] = pw;
     } else {
         m_passPhraseGenerator.setWordCount(passPhraseWordCount());

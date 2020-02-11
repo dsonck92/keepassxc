@@ -19,11 +19,7 @@
 #import "AppKitImpl.h"
 
 #import <AppKit/NSWorkspace.h>
-#import <Availability.h>
-
-#if __MAC_OS_X_VERSION_MAX_ALLOWED < 101200
-static const NSEventMask NSEventMaskKeyDown = NSKeyDownMask;
-#endif
+#import <CoreVideo/CVPixelBuffer.h>
 
 @implementation AppKitImpl
 
@@ -124,28 +120,38 @@ static const NSEventMask NSEventMaskKeyDown = NSKeyDownMask;
 }
 
 //
-// Add global event monitor
-//
-- (id) addGlobalMonitor:(NSEventMask) mask handler:(void (^)(NSEvent*)) handler
-{
-    return [NSEvent addGlobalMonitorForEventsMatchingMask:mask handler:handler];
-}
-
-//
-// Remove global event monitor
-//
-- (void) removeGlobalMonitor:(id) monitor
-{
-    [NSEvent removeMonitor:monitor];
-}
-
-//
 // Check if accessibility is enabled, may show an popup asking for permissions
 //
 - (bool) enableAccessibility
 {
+    // Request accessibility permissions for Auto-Type type on behalf of the user
     NSDictionary* opts = @{static_cast<id>(kAXTrustedCheckOptionPrompt): @YES};
     return AXIsProcessTrustedWithOptions(static_cast<CFDictionaryRef>(opts));
+}
+
+//
+// Check if screen recording is enabled, may show an popup asking for permissions
+//
+- (bool) enableScreenRecording
+{
+    if (@available(macOS 10.15, *)) {
+        // Request screen recording permission on macOS 10.15+
+        // This is necessary to get the current window title
+        CGDisplayStreamRef stream = CGDisplayStreamCreate(CGMainDisplayID(), 1, 1, kCVPixelFormatType_32BGRA, nil,
+                                                          ^(CGDisplayStreamFrameStatus status, uint64_t displayTime, 
+                                                                  IOSurfaceRef frameSurface, CGDisplayStreamUpdateRef updateRef) {
+                                                              Q_UNUSED(status);
+                                                              Q_UNUSED(displayTime);
+                                                              Q_UNUSED(frameSurface);
+                                                              Q_UNUSED(updateRef);
+                                                          });
+        if (stream) {
+            CFRelease(stream);
+        } else {
+            return NO;
+        }
+    }
+    return YES;
 }
 
 @end
@@ -200,21 +206,12 @@ bool AppKit::isDarkMode()
     return [static_cast<id>(self) isDarkMode];
 }
 
-void* AppKit::addGlobalMonitor(CGKeyCode keycode, CGEventFlags modifier, void* userData, void (*handler)(void*))
-{
-    return [static_cast<id>(self) addGlobalMonitor:NSEventMaskKeyDown handler:^(NSEvent* event) {
-        if (event.keyCode == keycode && (event.modifierFlags & modifier) == modifier) {
-            handler(userData);
-        }
-    }];
-}
-
-void AppKit::removeGlobalMonitor(void* monitor)
-{
-    [static_cast<id>(self) removeGlobalMonitor:static_cast<id>(monitor)];
-}
-
 bool AppKit::enableAccessibility()
 {
     return [static_cast<id>(self) enableAccessibility];
+}
+
+bool AppKit::enableScreenRecording()
+{
+    return [static_cast<id>(self) enableScreenRecording];
 }

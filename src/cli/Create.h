@@ -21,7 +21,6 @@
 #include "Command.h"
 
 #include "keys/FileKey.h"
-#include "keys/PasswordKey.h"
 
 class Create : public Command
 {
@@ -29,8 +28,9 @@ public:
     Create();
     int execute(const QStringList& arguments) override;
 
+    static const QCommandLineOption DecryptionTimeOption;
+
 private:
-    QSharedPointer<PasswordKey> getPasswordFromStdin();
     bool loadFileKey(const QString& path, QSharedPointer<FileKey>& fileKey);
 };
 

@@ -1,7 +1,8 @@
 # <img src="https://keepassxc.org/logo.png" width="40" height="40"/> KeePassXC
-[![TeamCity Build Status](https://ci.keepassxc.org/app/rest/builds/buildType:\(project:KeepassXC\)/statusIcon)](https://ci.keepassxc.org/?guest=1) [![codecov](https://codecov.io/gh/keepassxreboot/keepassxc/branch/develop/graph/badge.svg)](https://codecov.io/gh/keepassxreboot/keepassxc)
+[![TeamCity Build Status](https://ci.keepassxc.org/app/rest/builds/buildType:\(project:KeepassXC\)/statusIcon)](https://ci.keepassxc.org/?guest=1)
+[![codecov](https://codecov.io/gh/keepassxreboot/keepassxc/branch/develop/graph/badge.svg)](https://codecov.io/gh/keepassxreboot/keepassxc)
+[![GitHub release](https://img.shields.io/github/release/keepassxreboot/keepassxc)](https://github.com/keepassxreboot/keepassxc/releases/)
 
-## About KeePassXC
 [KeePassXC](https://keepassxc.org) is a cross-platform community fork of
 [KeePassX](https://www.keepassx.org/).
 Our goal is to extend and improve it with new features and bugfixes
@@ -22,14 +23,14 @@ so please check out your distribution's package list to see if KeePassXC is avai
 - YubiKey challenge-response support
 - TOTP generation
 - CSV import
-- A [Command Line Interface (keepassxc-cli)](./src/cli/keepassxc-cli.1)
+- A [Command Line Interface (keepassxc-cli)](./share/docs/man/keepassxc-cli.1)
 - DEP and ASLR hardening
 - Stand-alone password and passphrase generator
 - Password strength meter
 - Using website favicons as entry icons
 - Merging of databases
 - Automatic reload when the database changed on disk
-- Browser integration with KeePassXC-Browser using [native messaging](https://developer.chrome.com/extensions/nativeMessaging) for [Mozilla Firefox](https://addons.mozilla.org/en-US/firefox/addon/keepassxc-browser/) and [Google Chrome, Chromium, Vivaldi, or Brave](https://chrome.google.com/webstore/detail/keepassxc-browser/oboonakemofpalcgghocfoadofidjkkk)
+- Browser integration with KeePassXC-Browser using [native messaging](https://developer.chrome.com/extensions/nativeMessaging) for [Mozilla Firefox](https://addons.mozilla.org/en-US/firefox/addon/keepassxc-browser/) and [Google Chrome, Chromium, Vivaldi, or Brave](https://chrome.google.com/webstore/detail/keepassxc-browser/oboonakemofpalcgghocfoadofidjkkk) and [Microsoft Edge](https://microsoftedge.microsoft.com/addons/detail/pdffhmdngciaglkoonimfcmckehcpafo)
 - Synchronize passwords using KeeShare. See [Using Sharing](./docs/QUICKSTART.md#using-sharing) for more details.
 - Many bug fixes
 

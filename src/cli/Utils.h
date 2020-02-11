@@ -20,6 +20,7 @@
 
 #include "cli/TextStream.h"
 #include "core/Database.h"
+#include "core/EntryAttributes.h"
 #include "keys/CompositeKey.h"
 #include "keys/FileKey.h"
 #include "keys/PasswordKey.h"
@@ -40,6 +41,7 @@ namespace Utils
 
     void setStdinEcho(bool enable);
     QString getPassword(FILE* outputDescriptor = STDOUT);
+    QSharedPointer<PasswordKey> getPasswordFromStdin();
     int clipText(const QString& text);
     QSharedPointer<Database> unlockDatabase(const QString& databaseFilename,
                                             const bool isPasswordProtected = true,
@@ -49,6 +51,14 @@ namespace Utils
                                             FILE* errorDescriptor = STDERR);
 
     QStringList splitCommandString(const QString& command);
+
+    /**
+     * If `attributes` contains an attribute named `name` (case-sensitive),
+     * returns a list containing only `name`. Otherwise, returns the list of
+     * all attribute names in `attributes` matching the given name
+     * (case-insensitive).
+     */
+    QStringList findAttributes(const EntryAttributes& attributes, const QString& name);
 
     namespace Test
     {

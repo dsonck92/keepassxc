@@ -51,6 +51,7 @@
 #include "sshagent/SSHAgent.h"
 #endif
 #ifdef WITH_XC_BROWSER
+#include "EntryURLModel.h"
 #include "browser/BrowserService.h"
 #endif
 #include "gui/Clipboard.h"
@@ -82,7 +83,9 @@ EditEntryWidget::EditEntryWidget(QWidget* parent)
     , m_sshAgentWidget(new QWidget())
 #endif
 #ifdef WITH_XC_BROWSER
+    , m_browserSettingsChanged(false)
     , m_browserWidget(new QWidget())
+    , m_additionalURLsDataModel(new EntryURLModel(this))
 #endif
     , m_editWidgetProperties(new EditWidgetProperties())
     , m_historyWidget(new QWidget())
@@ -103,12 +106,8 @@ EditEntryWidget::EditEntryWidget(QWidget* parent)
     setupAutoType();
 
 #ifdef WITH_XC_SSHAGENT
-    if (config()->get("SSHAgent", false).toBool()) {
-        setupSSHAgent();
-        m_sshAgentEnabled = true;
-    } else {
-        m_sshAgentEnabled = false;
-    }
+    setupSSHAgent();
+    m_sshAgentEnabled = config()->get("SSHAgent", false).toBool();
 #endif
 
 #ifdef WITH_XC_BROWSER
@@ -164,6 +163,7 @@ void EditEntryWidget::setupMain()
 #ifdef WITH_XC_NETWORKING
     connect(m_mainUi->fetchFaviconButton, SIGNAL(clicked()), m_iconsWidget, SLOT(downloadFavicon()));
     connect(m_mainUi->urlEdit, SIGNAL(textChanged(QString)), m_iconsWidget, SLOT(setUrl(QString)));
+    m_mainUi->urlEdit->enableVerifyMode();
 #endif
     connect(m_mainUi->expireCheck, SIGNAL(toggled(bool)), m_mainUi->expireDatePicker, SLOT(setEnabled(bool)));
     connect(m_mainUi->notesEnabled, SIGNAL(toggled(bool)), this, SLOT(toggleHideNotes(bool)));
@@ -198,7 +198,7 @@ void EditEntryWidget::setupAdvanced()
     connect(m_advancedUi->editAttributeButton, SIGNAL(clicked()), SLOT(editCurrentAttribute()));
     connect(m_advancedUi->removeAttributeButton, SIGNAL(clicked()), SLOT(removeCurrentAttribute()));
     connect(m_advancedUi->protectAttributeButton, SIGNAL(toggled(bool)), SLOT(protectCurrentAttribute(bool)));
-    connect(m_advancedUi->revealAttributeButton, SIGNAL(clicked(bool)), SLOT(revealCurrentAttribute()));
+    connect(m_advancedUi->revealAttributeButton, SIGNAL(clicked(bool)), SLOT(toggleCurrentAttributeVisibility()));
     connect(m_advancedUi->attributesView->selectionModel(),
             SIGNAL(currentChanged(QModelIndex,QModelIndex)),
             SLOT(updateCurrentAttribute()));
@@ -265,17 +265,118 @@ void EditEntryWidget::setupBrowser()
 
     if (config()->get("Browser/Enabled", false).toBool()) {
         addPage(tr("Browser Integration"), FilePath::instance()->icon("apps", "internet-web-browser"), m_browserWidget);
-        connect(m_browserUi->skipAutoSubmitCheckbox, SIGNAL(toggled(bool)), SLOT(updateBrowser()));
-        connect(m_browserUi->hideEntryCheckbox, SIGNAL(toggled(bool)), SLOT(updateBrowser()));
+        m_additionalURLsDataModel->setEntryAttributes(m_entryAttributes);
+        m_browserUi->additionalURLsView->setModel(m_additionalURLsDataModel);
+
+        // Use a custom item delegate to align the icon to the right side
+        auto iconDelegate = new URLModelIconDelegate(m_browserUi->additionalURLsView);
+        m_browserUi->additionalURLsView->setItemDelegate(iconDelegate);
+
+        // clang-format off
+        connect(m_browserUi->skipAutoSubmitCheckbox, SIGNAL(toggled(bool)), SLOT(updateBrowserModified()));
+        connect(m_browserUi->hideEntryCheckbox, SIGNAL(toggled(bool)), SLOT(updateBrowserModified()));
+        connect(m_browserUi->onlyHttpAuthCheckbox, SIGNAL(toggled(bool)), SLOT(updateBrowserModified()));
+        connect(m_browserUi->addURLButton, SIGNAL(clicked()), SLOT(insertURL()));
+        connect(m_browserUi->removeURLButton, SIGNAL(clicked()), SLOT(removeCurrentURL()));
+        connect(m_browserUi->editURLButton, SIGNAL(clicked()), SLOT(editCurrentURL()));
+        connect(m_browserUi->additionalURLsView->selectionModel(),
+            SIGNAL(currentChanged(QModelIndex,QModelIndex)),
+            SLOT(updateCurrentURL()));
+        connect(m_additionalURLsDataModel,
+            SIGNAL(dataChanged(const QModelIndex&, const QModelIndex&, const QVector<int>&)),
+            SLOT(updateCurrentAttribute()));
+        // clang-format on
     }
+}
+
+void EditEntryWidget::updateBrowserModified()
+{
+    m_browserSettingsChanged = true;
 }
 
 void EditEntryWidget::updateBrowser()
 {
+    if (!m_browserSettingsChanged) {
+        return;
+    }
+
     auto skip = m_browserUi->skipAutoSubmitCheckbox->isChecked();
     auto hide = m_browserUi->hideEntryCheckbox->isChecked();
-    m_customData->set(BrowserService::OPTION_SKIP_AUTO_SUBMIT, (skip ? QString("true") : QString("false")));
-    m_customData->set(BrowserService::OPTION_HIDE_ENTRY, (hide ? QString("true") : QString("false")));
+    auto onlyHttpAuth = m_browserUi->onlyHttpAuthCheckbox->isChecked();
+    m_customData->set(BrowserService::OPTION_SKIP_AUTO_SUBMIT, (skip ? TRUE_STR : FALSE_STR));
+    m_customData->set(BrowserService::OPTION_HIDE_ENTRY, (hide ? TRUE_STR : FALSE_STR));
+    m_customData->set(BrowserService::OPTION_ONLY_HTTP_AUTH, (onlyHttpAuth ? TRUE_STR : FALSE_STR));
+}
+
+void EditEntryWidget::insertURL()
+{
+    Q_ASSERT(!m_history);
+
+    QString name("KP2A_URL");
+    int i = 1;
+
+    while (m_entryAttributes->keys().contains(name)) {
+        name = QString("KP2A_URL_%1").arg(i);
+        i++;
+    }
+
+    m_entryAttributes->set(name, tr("<empty URL>"));
+    QModelIndex index = m_additionalURLsDataModel->indexByKey(name);
+
+    m_browserUi->additionalURLsView->setCurrentIndex(index);
+    m_browserUi->additionalURLsView->edit(index);
+
+    setModified(true);
+}
+
+void EditEntryWidget::removeCurrentURL()
+{
+    Q_ASSERT(!m_history);
+
+    QModelIndex index = m_browserUi->additionalURLsView->currentIndex();
+
+    if (index.isValid()) {
+        auto result = MessageBox::question(this,
+                                           tr("Confirm Removal"),
+                                           tr("Are you sure you want to remove this URL?"),
+                                           MessageBox::Remove | MessageBox::Cancel,
+                                           MessageBox::Cancel);
+
+        if (result == MessageBox::Remove) {
+            m_entryAttributes->remove(m_additionalURLsDataModel->keyByIndex(index));
+            if (m_additionalURLsDataModel->rowCount() == 0) {
+                m_browserUi->editURLButton->setEnabled(false);
+                m_browserUi->removeURLButton->setEnabled(false);
+            }
+            setModified(true);
+        }
+    }
+}
+
+void EditEntryWidget::editCurrentURL()
+{
+    Q_ASSERT(!m_history);
+
+    QModelIndex index = m_browserUi->additionalURLsView->currentIndex();
+
+    if (index.isValid()) {
+        m_browserUi->additionalURLsView->edit(index);
+        setModified(true);
+    }
+}
+
+void EditEntryWidget::updateCurrentURL()
+{
+    QModelIndex index = m_browserUi->additionalURLsView->currentIndex();
+
+    if (index.isValid()) {
+        // Don't allow editing in history view
+        m_browserUi->editURLButton->setEnabled(!m_history);
+        m_browserUi->removeURLButton->setEnabled(!m_history);
+    } else {
+        m_browserUi->editURLButton->setEnabled(false);
+        m_browserUi->removeURLButton->setEnabled(false);
+    }
 }
 #endif
 
@@ -366,8 +467,12 @@ void EditEntryWidget::setupEntryUpdate()
 
 #ifdef WITH_XC_BROWSER
     if (config()->get("Browser/Enabled", false).toBool()) {
-        connect(m_browserUi->skipAutoSubmitCheckbox, SIGNAL(toggled(bool)), this, SLOT(setModified()));
-        connect(m_browserUi->hideEntryCheckbox, SIGNAL(toggled(bool)), this, SLOT(setModified()));
+        connect(m_browserUi->skipAutoSubmitCheckbox, SIGNAL(toggled(bool)), SLOT(setModified()));
+        connect(m_browserUi->hideEntryCheckbox, SIGNAL(toggled(bool)), SLOT(setModified()));
+        connect(m_browserUi->onlyHttpAuthCheckbox, SIGNAL(toggled(bool)), SLOT(setModified()));
+        connect(m_browserUi->addURLButton, SIGNAL(toggled(bool)), SLOT(setModified()));
+        connect(m_browserUi->removeURLButton, SIGNAL(toggled(bool)), SLOT(setModified()));
+        connect(m_browserUi->editURLButton, SIGNAL(toggled(bool)), SLOT(setModified()));
     }
 #endif
 }
@@ -435,7 +540,7 @@ void EditEntryWidget::setupSSHAgent()
 void EditEntryWidget::updateSSHAgent()
 {
     KeeAgentSettings settings;
-    settings.fromXml(m_advancedUi->attachmentsWidget->getAttachment("KeeAgent.settings"));
+    settings.fromEntry(m_entry);
 
     m_sshAgentUi->addKeyToAgentCheckBox->setChecked(settings.addAtDatabaseOpen());
     m_sshAgentUi->removeKeyFromAgentCheckBox->setChecked(settings.removeAtDatabaseClose());
@@ -448,15 +553,8 @@ void EditEntryWidget::updateSSHAgent()
     m_sshAgentUi->copyToClipboardButton->setEnabled(false);
 
     m_sshAgentSettings = settings;
+
     updateSSHAgentAttachments();
-
-    if (settings.selectedType() == "attachment") {
-        m_sshAgentUi->attachmentRadioButton->setChecked(true);
-    } else {
-        m_sshAgentUi->externalFileRadioButton->setChecked(true);
-    }
-
-    updateSSHAgentKeyInfo();
 }
 
 void EditEntryWidget::updateSSHAgentAttachment()
@@ -481,6 +579,14 @@ void EditEntryWidget::updateSSHAgentAttachments()
 
     m_sshAgentUi->attachmentComboBox->setCurrentText(m_sshAgentSettings.attachmentName());
     m_sshAgentUi->externalFileEdit->setText(m_sshAgentSettings.fileName());
+
+    if (m_sshAgentSettings.selectedType() == "attachment") {
+        m_sshAgentUi->attachmentRadioButton->setChecked(true);
+    } else {
+        m_sshAgentUi->externalFileRadioButton->setChecked(true);
+    }
+
+    updateSSHAgentKeyInfo();
 }
 
 void EditEntryWidget::updateSSHAgentKeyInfo()
@@ -530,10 +636,8 @@ void EditEntryWidget::updateSSHAgentKeyInfo()
     }
 }
 
-void EditEntryWidget::saveSSHAgentConfig()
+void EditEntryWidget::toKeeAgentSettings(KeeAgentSettings& settings) const
 {
-    KeeAgentSettings settings;
-
     settings.setAddAtDatabaseOpen(m_sshAgentUi->addKeyToAgentCheckBox->isChecked());
     settings.setRemoveAtDatabaseClose(m_sshAgentUi->removeKeyFromAgentCheckBox->isChecked());
     settings.setUseConfirmConstraintWhenAdding(m_sshAgentUi->requireUserConfirmationCheckBox->isChecked());
@@ -553,14 +657,6 @@ void EditEntryWidget::saveSSHAgentConfig()
 
     // we don't use this either but we don't want it to dirty flag the config
     settings.setSaveAttachmentToTempFile(m_sshAgentSettings.saveAttachmentToTempFile());
-
-    if (settings.isDefault()) {
-        m_advancedUi->attachmentsWidget->removeAttachment("KeeAgent.settings");
-    } else if (settings != m_sshAgentSettings) {
-        m_advancedUi->attachmentsWidget->setAttachment("KeeAgent.settings", settings.toXml());
-    }
-
-    m_sshAgentSettings = settings;
 }
 
 void EditEntryWidget::browsePrivateKey()
@@ -575,56 +671,16 @@ void EditEntryWidget::browsePrivateKey()
 
 bool EditEntryWidget::getOpenSSHKey(OpenSSHKey& key, bool decrypt)
 {
-    QString fileName;
-    QByteArray privateKeyData;
+    KeeAgentSettings settings;
+    toKeeAgentSettings(settings);
 
-    if (m_sshAgentUi->attachmentRadioButton->isChecked()) {
-        fileName = m_sshAgentUi->attachmentComboBox->currentText();
-        privateKeyData = m_advancedUi->attachmentsWidget->getAttachment(fileName);
-    } else {
-        QFile localFile(m_sshAgentUi->externalFileEdit->text());
-        QFileInfo localFileInfo(localFile);
-        fileName = localFileInfo.fileName();
-
-        if (localFile.fileName().isEmpty()) {
-            return false;
-        }
-
-        if (localFile.size() > 1024 * 1024) {
-            showMessage(tr("File too large to be a private key"), MessageWidget::Error);
-            return false;
-        }
-
-        if (!localFile.open(QIODevice::ReadOnly)) {
-            showMessage(tr("Failed to open private key"), MessageWidget::Error);
-            return false;
-        }
-
-        privateKeyData = localFile.readAll();
-    }
-
-    if (privateKeyData.isEmpty()) {
+    if (!settings.keyConfigured()) {
         return false;
     }
 
-    if (!key.parsePKCS1PEM(privateKeyData)) {
-        showMessage(key.errorString(), MessageWidget::Error);
+    if (!settings.toOpenSSHKey(m_entry, key, decrypt)) {
+        showMessage(settings.errorString(), MessageWidget::Error);
         return false;
-    }
-
-    if (key.encrypted() && (decrypt || key.publicKey().isEmpty())) {
-        if (!key.openKey(m_entry->password())) {
-            showMessage(key.errorString(), MessageWidget::Error);
-            return false;
-        }
-    }
-
-    if (key.comment().isEmpty()) {
-        key.setComment(m_entry->username());
-    }
-
-    if (key.comment().isEmpty()) {
-        key.setComment(fileName);
     }
 
     return true;
@@ -642,11 +698,7 @@ void EditEntryWidget::addKeyToAgent()
     m_sshAgentUi->publicKeyEdit->document()->setPlainText(key.publicKey());
 
     KeeAgentSettings settings;
-
-    settings.setRemoveAtDatabaseClose(m_sshAgentUi->removeKeyFromAgentCheckBox->isChecked());
-    settings.setUseConfirmConstraintWhenAdding(m_sshAgentUi->requireUserConfirmationCheckBox->isChecked());
-    settings.setUseLifetimeConstraintWhenAdding(m_sshAgentUi->lifetimeCheckBox->isChecked());
-    settings.setLifetimeConstraintDuration(m_sshAgentUi->lifetimeSpinBox->value());
+    toKeeAgentSettings(settings);
 
     if (!SSHAgent::instance()->addIdentity(key, settings)) {
         showMessage(SSHAgent::instance()->errorString(), MessageWidget::Error);
@@ -709,13 +761,9 @@ void EditEntryWidget::toggleHideNotes(bool visible)
     m_mainUi->notesHint->setVisible(!visible);
 }
 
-QString EditEntryWidget::entryTitle() const
+Entry* EditEntryWidget::currentEntry() const
 {
-    if (m_entry) {
-        return m_entry->title();
-    } else {
-        return QString();
-    }
+    return m_entry;
 }
 
 void EditEntryWidget::loadEntry(Entry* entry,
@@ -862,15 +910,33 @@ void EditEntryWidget::setForms(Entry* entry, bool restore)
 
 #ifdef WITH_XC_BROWSER
     if (m_customData->contains(BrowserService::OPTION_SKIP_AUTO_SUBMIT)) {
-        m_browserUi->skipAutoSubmitCheckbox->setChecked(m_customData->value(BrowserService::OPTION_SKIP_AUTO_SUBMIT) == "true");
+        // clang-format off
+        m_browserUi->skipAutoSubmitCheckbox->setChecked(m_customData->value(BrowserService::OPTION_SKIP_AUTO_SUBMIT) == TRUE_STR);
+        // clang-format on
     } else {
         m_browserUi->skipAutoSubmitCheckbox->setChecked(false);
     }
 
     if (m_customData->contains(BrowserService::OPTION_HIDE_ENTRY)) {
-        m_browserUi->hideEntryCheckbox->setChecked(m_customData->value(BrowserService::OPTION_HIDE_ENTRY) == "true");
+        m_browserUi->hideEntryCheckbox->setChecked(m_customData->value(BrowserService::OPTION_HIDE_ENTRY) == TRUE_STR);
     } else {
         m_browserUi->hideEntryCheckbox->setChecked(false);
+    }
+
+    if (m_customData->contains(BrowserService::OPTION_ONLY_HTTP_AUTH)) {
+        m_browserUi->onlyHttpAuthCheckbox->setChecked(m_customData->value(BrowserService::OPTION_ONLY_HTTP_AUTH)
+                                                      == TRUE_STR);
+    } else {
+        m_browserUi->onlyHttpAuthCheckbox->setChecked(false);
+    }
+
+    m_browserUi->addURLButton->setEnabled(!m_history);
+    m_browserUi->removeURLButton->setEnabled(false);
+    m_browserUi->editURLButton->setEnabled(false);
+    m_browserUi->additionalURLsView->setEditTriggers(editTriggers);
+
+    if (m_additionalURLsDataModel->rowCount() != 0) {
+        m_browserUi->additionalURLsView->setCurrentIndex(m_additionalURLsDataModel->index(0, 0));
     }
 #endif
 
@@ -941,8 +1007,12 @@ bool EditEntryWidget::commitEntry()
     m_autoTypeAssoc->removeEmpty();
 
 #ifdef WITH_XC_SSHAGENT
-    if (m_sshAgentEnabled) {
-        saveSSHAgentConfig();
+    toKeeAgentSettings(m_sshAgentSettings);
+#endif
+
+#ifdef WITH_XC_BROWSER
+    if (config()->get("Browser/Enabled", false).toBool()) {
+        updateBrowser();
     }
 #endif
 
@@ -956,13 +1026,8 @@ bool EditEntryWidget::commitEntry()
         m_entry->endUpdate();
     }
 
-#ifdef WITH_XC_SSHAGENT
-    if (m_sshAgentEnabled) {
-        updateSSHAgent();
-    }
-#endif
-
     m_historyModel->setEntries(m_entry->historyItems());
+    m_advancedUi->attachmentsWidget->setEntryAttachments(m_entry->attachments());
 
     showMessage(tr("Entry updated successfully."), MessageWidget::Positive);
     setModified(false);
@@ -994,15 +1059,15 @@ void EditEntryWidget::updateEntryData(Entry* entry) const
     entry->setNotes(m_mainUi->notesEdit->toPlainText());
 
     if (m_advancedUi->fgColorCheckBox->isChecked() && m_advancedUi->fgColorButton->property("color").isValid()) {
-        entry->setForegroundColor(QColor(m_advancedUi->fgColorButton->property("color").toString()));
+        entry->setForegroundColor(m_advancedUi->fgColorButton->property("color").toString());
     } else {
-        entry->setForegroundColor(QColor());
+        entry->setForegroundColor(QString());
     }
 
     if (m_advancedUi->bgColorCheckBox->isChecked() && m_advancedUi->bgColorButton->property("color").isValid()) {
-        entry->setBackgroundColor(QColor(m_advancedUi->bgColorButton->property("color").toString()));
+        entry->setBackgroundColor(m_advancedUi->bgColorButton->property("color").toString());
     } else {
-        entry->setBackgroundColor(QColor());
+        entry->setBackgroundColor(QString());
     }
 
     IconStruct iconStruct = m_iconsWidget->state();
@@ -1023,6 +1088,12 @@ void EditEntryWidget::updateEntryData(Entry* entry) const
     }
 
     entry->autoTypeAssociations()->copyDataFrom(m_autoTypeAssoc);
+
+#ifdef WITH_XC_SSHAGENT
+    if (m_sshAgentEnabled) {
+        m_sshAgentSettings.toEntry(entry);
+    }
+#endif
 }
 
 void EditEntryWidget::cancel()
@@ -1041,8 +1112,8 @@ void EditEntryWidget::cancel()
     bool accepted = false;
     if (isModified()) {
         auto result = MessageBox::question(this,
-                                           QString(),
-                                           tr("Entry has unsaved changes"),
+                                           tr("Unsaved Changes"),
+                                           tr("Would you like to save changes to this entry?"),
                                            MessageBox::Cancel | MessageBox::Save | MessageBox::Discard,
                                            MessageBox::Cancel);
         if (result == MessageBox::Cancel) {
@@ -1184,11 +1255,12 @@ void EditEntryWidget::displayAttribute(QModelIndex index, bool showProtected)
     // Block signals to prevent modified being set
     m_advancedUi->protectAttributeButton->blockSignals(true);
     m_advancedUi->attributesEdit->blockSignals(true);
+    m_advancedUi->revealAttributeButton->setText(tr("Reveal"));
 
     if (index.isValid()) {
         QString key = m_attributesModel->keyByIndex(index);
         if (showProtected) {
-            m_advancedUi->attributesEdit->setPlainText(tr("[PROTECTED] Press reveal to view or edit"));
+            m_advancedUi->attributesEdit->setPlainText(tr("[PROTECTED] Press Reveal to view or edit"));
             m_advancedUi->attributesEdit->setEnabled(false);
             m_advancedUi->revealAttributeButton->setEnabled(true);
             m_advancedUi->protectAttributeButton->setChecked(true);
@@ -1235,7 +1307,7 @@ void EditEntryWidget::protectCurrentAttribute(bool state)
     }
 }
 
-void EditEntryWidget::revealCurrentAttribute()
+void EditEntryWidget::toggleCurrentAttributeVisibility()
 {
     if (!m_advancedUi->attributesEdit->isEnabled()) {
         QModelIndex index = m_advancedUi->attributesView->currentIndex();
@@ -1246,6 +1318,10 @@ void EditEntryWidget::revealCurrentAttribute()
             m_advancedUi->attributesEdit->setEnabled(true);
             m_advancedUi->attributesEdit->blockSignals(oldBlockSignals);
         }
+        m_advancedUi->revealAttributeButton->setText(tr("Hide"));
+    } else {
+        protectCurrentAttribute(true);
+        m_advancedUi->revealAttributeButton->setText(tr("Reveal"));
     }
 }
 

@@ -20,6 +20,7 @@
 #ifndef KEEPASSX_GLOBAL_H
 #define KEEPASSX_GLOBAL_H
 
+#include <QString>
 #include <QtGlobal>
 
 #if defined(Q_OS_WIN)
@@ -35,6 +36,15 @@
 #ifndef QUINT32_MAX
 #define QUINT32_MAX 4294967295U
 #endif
+
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+#define FILE_CASE_SENSITIVE Qt::CaseInsensitive
+#else
+#define FILE_CASE_SENSITIVE Qt::CaseSensitive
+#endif
+
+static const auto TRUE_STR = QStringLiteral("true");
+static const auto FALSE_STR = QStringLiteral("false");
 
 template <typename T> struct AddConst
 {

@@ -195,7 +195,7 @@
      <x>0</x>
      <y>0</y>
      <width>800</width>
-     <height>20</height>
+     <height>21</height>
     </rect>
    </property>
    <property name="focusPolicy">
@@ -236,6 +236,7 @@
     <addaction name="actionDatabaseClose"/>
     <addaction name="separator"/>
     <addaction name="actionChangeMasterKey"/>
+    <addaction name="actionReports"/>
     <addaction name="actionChangeDatabaseSettings"/>
     <addaction name="separator"/>
     <addaction name="actionDatabaseMerge"/>
@@ -298,11 +299,11 @@
     <addaction name="actionEntryCopyUsername"/>
     <addaction name="actionEntryCopyPassword"/>
     <addaction name="menuEntryCopyAttribute"/>
-    <addaction name="separator"/>
     <addaction name="menuEntryTotp"/>
-    <addaction name="actionEntryOpenUrl"/>
+    <addaction name="separator"/>
     <addaction name="actionEntryAutoType"/>
     <addaction name="separator"/>
+    <addaction name="actionEntryOpenUrl"/>
     <addaction name="actionEntryDownloadIcon"/>
    </widget>
    <widget class="QMenu" name="menuGroups">
@@ -346,8 +347,8 @@
    </property>
    <property name="iconSize">
     <size>
-     <width>22</width>
-     <height>22</height>
+     <width>32</width>
+     <height>32</height>
     </size>
    </property>
    <attribute name="toolBarArea">
@@ -356,7 +357,6 @@
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="actionDatabaseNew"/>
    <addaction name="actionDatabaseOpen"/>
    <addaction name="actionDatabaseSave"/>
    <addaction name="separator"/>
@@ -531,6 +531,20 @@
    </property>
    <property name="text">
     <string>Change master &amp;key...</string>
+   </property>
+  </action>
+  <action name="actionReports">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>&amp;Reports...</string>
+   </property>
+   <property name="toolTip">
+    <string>Statistics, health check, etc.</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
    </property>
   </action>
   <action name="actionChangeDatabaseSettings">
@@ -765,7 +779,7 @@
     <string>&amp;Keyboard Shortcuts</string>
    </property>
    <property name="shortcut">
-    <string>Ctrl+/</string>
+    <string notr="true">Ctrl+/</string>
    </property>
   </action>
  </widget>

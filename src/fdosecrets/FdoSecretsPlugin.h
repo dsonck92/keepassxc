@@ -59,6 +59,17 @@ public:
      */
     FdoSecrets::Service* serviceInstance() const;
 
+    /**
+     * @return The db tabs widget, containing opened databases. Can be nullptr.
+     */
+    DatabaseTabWidget* dbTabs() const;
+
+    /**
+     * Check the running secret service and returns info about it
+     * @return html string suitable to be shown in the UI
+     */
+    QString reportExistingService() const;
+
 public slots:
     void emitRequestSwitchToDatabases();
     void emitRequestShowNotification(const QString& msg, const QString& title = {});
@@ -67,6 +78,8 @@ signals:
     void error(const QString& msg);
     void requestSwitchToDatabases();
     void requestShowNotification(const QString& msg, const QString& title, int msTimeoutHint);
+    void secretServiceStarted();
+    void secretServiceStopped();
 
 private:
     QPointer<DatabaseTabWidget> m_dbTabs;
